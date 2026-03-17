@@ -32,6 +32,9 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
 
     private void OnComboUpdated(Entity<TComponent> ent, ref CombatMasteryComboUpdatedEvent args)
     {
+        if (args.TemplateExecuted)
+            return;
+
         if (!ent.Comp.TemplateCollection.TryFindTailMatch(args.Combo, out var matchedTemplate))
             return;
 
@@ -39,6 +42,7 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
             return;
 
         OnTemplateMatched(ent, args.Target, matchedTemplate);
+        args.TemplateExecuted = true;
     }
 
     protected abstract void OnTemplateMatched(Entity<TComponent> ent, EntityUid target, CombatMasteryTemplate template);

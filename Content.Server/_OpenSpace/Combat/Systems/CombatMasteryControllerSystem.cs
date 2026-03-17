@@ -111,6 +111,9 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
 
         var ev = new CombatMasteryComboUpdatedEvent(target, ent.Comp.CombatMasteryCurrentCombo);
         RaiseLocalEvent(ent.Owner, ref ev);
+
+        if (ev.TemplateExecuted)
+            ent.Comp.CombatMasteryCurrentCombo.Clear();
     }
 
     private static void ClearCombo(CombatMasteryComponent component)
