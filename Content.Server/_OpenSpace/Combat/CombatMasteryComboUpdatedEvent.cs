@@ -1,0 +1,16 @@
+using System.Collections.Generic;
+
+namespace Content.Server._OpenSpace.Combat;
+
+[ByRefEvent]
+public sealed class CombatMasteryComboUpdatedEvent : EntityEventArgs
+{
+    public EntityUid Target { get; }
+    public IReadOnlyList<ComboMasteryKeys> Combo { get; }
+
+    public CombatMasteryComboUpdatedEvent(EntityUid target, IReadOnlyList<ComboMasteryKeys> combo)
+    {
+        Target = target;
+        Combo = combo;
+    }
+}

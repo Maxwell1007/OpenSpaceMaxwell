@@ -27,7 +27,7 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         if (_combatMode.IsInCombatMode(ent))
             return;
 
-        HandleHelpInteraction(ent.Comp, ent.Owner, args.Target);
+        HandleHelpInteraction(ent, args.Target);
     }
 
     private void OnAttackAttempt(Entity<CombatMasteryComponent> ent, ref AttackAttemptEvent args)
@@ -37,11 +37,11 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
 
         if (args.Disarm)
         {
-            HandleDisarm(ent.Comp, target);
+            HandleDisarm(ent, target);
             return;
         }
 
-        HandleAttack(ent.Comp, ent.Owner, target);
+        HandleAttack(ent, target);
     }
 
     private void OnPullStarted(Entity<CombatMasteryComponent> ent, ref PullStartedMessage args)
@@ -49,46 +49,47 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         if (args.PullerUid != ent.Owner)
             return;
 
-        HandleGrab(ent.Comp, ent.Owner, args.PulledUid);
+        HandleGrab(ent, args.PulledUid);
     }
 
-    private void HandleHelpInteraction(CombatMasteryComponent component, EntityUid user, EntityUid target)
+    private void HandleHelpInteraction(Entity<CombatMasteryComponent> ent, EntityUid target)
     {
-        if (_hands.TryGetActiveItem(user, out _))
+        if (_hands.TryGetActiveItem(ent.Owner, out _))
             return;
 
-        UpdateCombo(component, target, ComboMasteryKeys.help);
+        UpdateCombo(ent, target, ComboMasteryKeys.help);
     }
 
-    private void HandleAttack(CombatMasteryComponent component, EntityUid user, EntityUid target)
+    private void HandleAttack(Entity<CombatMasteryComponent> ent, EntityUid target)
     {
-        if (_hands.TryGetActiveItem(user, out _))
+        if (_hands.TryGetActiveItem(ent.Owner, out _))
         {
-            ClearCombo(component);
+            ClearCombo(ent.Comp);
             return;
         }
 
-        UpdateCombo(component, target, ComboMasteryKeys.attack);
+        UpdateCombo(ent, target, ComboMasteryKeys.attack);
     }
 
-    private void HandleGrab(CombatMasteryComponent component, EntityUid user, EntityUid target)
+    private void HandleGrab(Entity<CombatMasteryComponent> ent, EntityUid target)
     {
-        if (!_combatMode.IsInCombatMode(user) || !HasComp<MobStateComponent>(target))
+        if (!_combatMode.IsInCombatMode(ent.Owner) || !HasComp<MobStateComponent>(target))
             return;
 
-        UpdateCombo(component, target, ComboMasteryKeys.grab);
+        UpdateCombo(ent, target, ComboMasteryKeys.grab);
     }
 
-    private void HandleDisarm(CombatMasteryComponent component, EntityUid target)
+    private void HandleDisarm(Entity<CombatMasteryComponent> ent, EntityUid target)
     {
         if (!HasComp<MobStateComponent>(target))
             return;
 
-        UpdateCombo(component, target, ComboMasteryKeys.disarm);
+        UpdateCombo(ent, target, ComboMasteryKeys.disarm);
     }
 
-    private static void UpdateCombo(CombatMasteryComponent component, EntityUid target, ComboMasteryKeys key)
+    private void UpdateCombo(Entity<CombatMasteryComponent> ent, EntityUid target, ComboMasteryKeys key)
     {
+        var component = ent.Comp;
         if (component.CurrentTarget != target)
         {
             component.CombatMasteryCurrentCombo.Clear();
@@ -100,6 +101,16 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         }
 
         component.CombatMasteryCurrentCombo.Add(key);
+        CheckTemplates(ent);
+    }
+
+    private void CheckTemplates(Entity<CombatMasteryComponent> ent)
+    {
+        if (ent.Comp.CurrentTarget is not { } target || ent.Comp.CombatMasteryCurrentCombo.Count == 0)
+            return;
+
+        var ev = new CombatMasteryComboUpdatedEvent(target, ent.Comp.CombatMasteryCurrentCombo);
+        RaiseLocalEvent(ent.Owner, ref ev);
     }
 
     private static void ClearCombo(CombatMasteryComponent component)

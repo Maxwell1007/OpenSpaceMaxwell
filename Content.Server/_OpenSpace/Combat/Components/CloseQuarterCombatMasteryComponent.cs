@@ -1,0 +1,94 @@
+using System;
+using Content.Server._OpenSpace.Combat.Systems;
+using Content.Shared.Damage.Prototypes;
+using Robust.Shared.Prototypes;
+
+namespace Content.Server._OpenSpace.Combat.Components;
+
+[RegisterComponent, ComponentProtoName("CloseQuarterCombatMastery")]
+[Access(typeof(CloseQuarterCombatMasterySystem))]
+public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICombatMasteryTemplateProvider
+{
+    public const string SlamTemplateName = "Slam";
+    public const string CQCKickTemplateName = "CQCKick";
+    public const string RestrainTemplateName = "Restrain";
+    public const string PressureTemplateName = "Pressure";
+    public const string ConsecutiveCQCTemplateName = "ConsecutiveCQC";
+
+    [DataField]
+    public ProtoId<DamageTypePrototype> BluntDamageType = "Blunt";
+
+    [DataField]
+    public float SlamBluntDamage = 10f;
+
+    [DataField]
+    public TimeSpan SlamKnockdownDuration = TimeSpan.FromSeconds(2);
+
+    [DataField]
+    public float CQCKickBluntDamage = 10f;
+
+    [DataField]
+    public float CQCKickStunnedBluntDamage = 15f;
+
+    [DataField]
+    public float CQCKickThrowDistance = 1f;
+
+    [DataField]
+    public float CQCKickThrowSpeed = 5f;
+
+    [DataField]
+    public TimeSpan CQCKickSleepDuration = TimeSpan.FromSeconds(8);
+
+    [DataField]
+    public float RestrainStaminaDamage = 30f;
+
+    [DataField]
+    public TimeSpan RestrainKnockdownDuration = TimeSpan.FromSeconds(4);
+
+    [DataField]
+    public float PressureStaminaDamage = 60f;
+
+    [DataField]
+    public float ConsecutiveCqcBluntDamage = 25f;
+
+    [DataField]
+    public float ConsecutiveCqcStaminaDamage = 50f;
+
+    [DataField]
+    private CombatMasteryTemplateCollection _templateCollection = new();
+
+    public CombatMasteryTemplateCollection TemplateCollection => _templateCollection;
+
+    public CloseQuarterCombatMasteryComponent()
+    {
+        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
+        {
+            Name = SlamTemplateName,
+            Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.attack],
+        });
+
+        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
+        {
+            Name = CQCKickTemplateName,
+            Sequence = [ComboMasteryKeys.attack, ComboMasteryKeys.attack],
+        });
+
+        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
+        {
+            Name = RestrainTemplateName,
+            Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.grab],
+        });
+
+        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
+        {
+            Name = PressureTemplateName,
+            Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.grab],
+        });
+
+        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
+        {
+            Name = ConsecutiveCQCTemplateName,
+            Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.attack],
+        });
+    }
+}
