@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Content.Server._OpenSpace.Combat.Systems;
+using Content.Shared.Damage;
 
 namespace Content.Server._OpenSpace.Combat.Components;
 
@@ -19,6 +20,12 @@ public sealed partial class CombatMasteryComponent : Component
 
     [DataField]
     public CombatMasteryTemplateCollection TemplateCollection = new();
+
+    [ViewVariables]
+    public DamageSpecifier? OriginalUnarmedMeleeDamage;
+
+    [ViewVariables]
+    public bool PendingMeleeDamageRefresh;
 }
 
 [DataDefinition]

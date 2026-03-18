@@ -1,11 +1,14 @@
 using Content.Server._OpenSpace.Combat.Components;
 using Content.Shared.CombatMode;
+using Content.Shared.Damage;
+using Content.Shared.FixedPoint;
 using Content.Shared.Hands.EntitySystems;
 using Content.Shared.Inventory.VirtualItem;
 using Content.Shared.Interaction;
 using Content.Shared.Interaction.Events;
 using Content.Shared.Mobs.Components;
 using Content.Shared.Movement.Pulling.Events;
+using Content.Shared.Weapons.Melee;
 
 namespace Content.Server._OpenSpace.Combat.Systems;
 
@@ -18,9 +21,17 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
     {
         base.Initialize();
 
+        SubscribeLocalEvent<CombatMasteryComponent, ComponentInit>(OnCombatMasteryInit);
         SubscribeLocalEvent<CombatMasteryComponent, UserInteractHandEvent>(OnUserInteractHand);
         SubscribeLocalEvent<CombatMasteryComponent, AttackAttemptEvent>(OnAttackAttempt);
         SubscribeLocalEvent<CombatMasteryComponent, PullStartedMessage>(OnPullStarted);
+        SubscribeLocalEvent<CombatMasteryComponent, CombatMasteryRefreshMeleeDamageEvent>(OnMeleeDamageRefreshRequested);
+    }
+
+    private void OnCombatMasteryInit(Entity<CombatMasteryComponent> ent, ref ComponentInit args)
+    {
+        ent.Comp.PendingMeleeDamageRefresh = false;
+        RefreshMeleeDamage(ent);
     }
 
     private void OnUserInteractHand(Entity<CombatMasteryComponent> ent, ref UserInteractHandEvent args)
@@ -126,5 +137,69 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
     {
         component.CombatMasteryCurrentCombo.Clear();
         component.CurrentTarget = null;
+    }
+
+    private void OnMeleeDamageRefreshRequested(Entity<CombatMasteryComponent> ent, ref CombatMasteryRefreshMeleeDamageEvent args)
+    {
+        ent.Comp.PendingMeleeDamageRefresh = true;
+    }
+
+    private void RefreshMeleeDamage(Entity<CombatMasteryComponent> ent)
+    {
+        if (!TryComp<MeleeWeaponComponent>(ent.Owner, out var melee))
+            return;
+
+        if (ent.Comp.OriginalUnarmedMeleeDamage == null)
+            ent.Comp.OriginalUnarmedMeleeDamage = new DamageSpecifier(melee.Damage);
+
+        var originalDamage = ent.Comp.OriginalUnarmedMeleeDamage;
+        if (originalDamage == null)
+            return;
+
+        var originalTotal = originalDamage.GetTotal().Float();
+        var collectEvent = new CombatMasteryCollectMeleeDamageEvent(originalTotal);
+        RaiseLocalEvent(ent.Owner, ref collectEvent);
+
+        var desiredDamage = ScaleDamageToTotal(originalDamage, collectEvent.HighestDamage);
+        melee.Damage = desiredDamage;
+        Dirty(ent.Owner, melee);
+    }
+
+    private static DamageSpecifier ScaleDamageToTotal(DamageSpecifier sourceDamage, float total)
+    {
+        if (sourceDamage.Empty || total <= 0f)
+            return new DamageSpecifier();
+
+        var sourceTotal = sourceDamage.GetTotal();
+        if (sourceTotal <= FixedPoint2.Zero)
+            return new DamageSpecifier(sourceDamage);
+
+        var desiredTotal = FixedPoint2.New(total);
+        var multiplier = desiredTotal / sourceTotal;
+
+        var scaled = new DamageSpecifier();
+        scaled.DamageDict.EnsureCapacity(sourceDamage.DamageDict.Count);
+
+        foreach (var (type, value) in sourceDamage.DamageDict)
+        {
+            scaled.DamageDict[type] = value * multiplier;
+        }
+
+        return scaled;
+    }
+
+    public override void Update(float frameTime)
+    {
+        base.Update(frameTime);
+
+        var query = EntityQueryEnumerator<CombatMasteryComponent>();
+        while (query.MoveNext(out var uid, out var comp))
+        {
+            if (!comp.PendingMeleeDamageRefresh)
+                continue;
+
+            comp.PendingMeleeDamageRefresh = false;
+            RefreshMeleeDamage((uid, comp));
+        }
     }
 }

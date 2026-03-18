@@ -58,7 +58,7 @@ public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICom
     public float UnarmedDamage = 13f;
 
     [DataField]
-    public float UnarmedDownedTargetDamage = 18f;
+    public float UnarmedDownedTargetBonusDamage = 5f;
 
     [DataField]
     public float ProneAttackerBonusDamage = 10f;
@@ -71,6 +71,9 @@ public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICom
 
     [DataField]
     public TimeSpan DefensiveMeleeCounterKnockdownDuration = TimeSpan.FromSeconds(4);
+
+    [DataField]
+    public TimeSpan DefensiveMeleeNullifyWindow = TimeSpan.FromSeconds(1);
 
     [DataField]
     public TimeSpan RestrainFollowupWindow = TimeSpan.FromSeconds(5);
@@ -103,6 +106,18 @@ public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICom
 
     [ViewVariables]
     public TimeSpan RestrainFollowupExpireAt;
+
+    [ViewVariables]
+    public EntityUid? PendingDefensiveMeleeOrigin;
+
+    [ViewVariables]
+    public TimeSpan PendingDefensiveMeleeExpireAt;
+
+    [ViewVariables]
+    public bool PendingDefensiveMeleeNullify;
+
+    [ViewVariables]
+    public bool PendingDefensiveMeleeNullifyStamina;
 
     public CloseQuarterCombatMasteryComponent()
     {

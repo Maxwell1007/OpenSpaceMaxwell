@@ -2,8 +2,10 @@ using System.Numerics;
 using Content.Server._OpenSpace.Combat;
 using Content.Server._OpenSpace.Combat.Components;
 using Content.Shared.Bed.Sleep;
+using Content.Shared.CombatMode;
 using Content.Shared.Damage;
 using Content.Shared.Damage.Components;
+using Content.Shared.Damage.Events;
 using Content.Shared.Damage.Systems;
 using Content.Shared.FixedPoint;
 using Content.Shared.Hands.Components;
@@ -19,6 +21,7 @@ using Content.Shared.Standing;
 using Content.Shared.StatusEffectNew;
 using Content.Shared.Stunnable;
 using Content.Shared.Throwing;
+using Content.Shared.Weapons.Melee;
 using Content.Shared.Weapons.Melee.Events;
 using Content.Shared._Starlight.Medical.Damage;
 using Robust.Server.GameObjects;
@@ -46,18 +49,36 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
     [Dependency] private readonly ThrowingSystem _throwing = default!;
     [Dependency] private readonly TransformSystem _transform = default!;
 
-    private static readonly TimeSpan PendingDamageTimeout = TimeSpan.FromSeconds(1);
-    private readonly Dictionary<EntityUid, PendingMeleeDamageChange> _pendingMeleeDamage = [];
-
     public override void Initialize()
     {
         base.Initialize();
 
+        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, ComponentStartup>(OnCqcStarted);
+        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, ComponentRemove>(OnCqcRemoved);
         SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, AttackAttemptEvent>(OnAttackAttempt,
             before: [typeof(CombatMasteryControllerSystem)]);
+        SubscribeLocalEvent<MeleeWeaponComponent, MeleeHitEvent>(OnMeleeHit, before: [typeof(SharedStaminaSystem)]);
+        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, DisarmedEvent>(OnDisarmed, before: [typeof(SharedStaminaSystem)]);
+        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, BeforeStaminaDamageEvent>(OnBeforeStaminaDamage);
+        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
         SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, CombatMasteryComboUpdatedEvent>(OnComboUpdated);
         SubscribeLocalEvent<DamageableComponent, AttackedEvent>(OnMeleeAttacked);
         SubscribeLocalEvent<DamageableComponent, DamageBeforeApplyEvent>(OnDamageBeforeApply);
+    }
+
+    private void OnCqcStarted(EntityUid uid, CloseQuarterCombatMasteryComponent component, ComponentStartup args)
+    {
+        RequestMeleeDamageRefresh(uid);
+    }
+
+    private void OnCqcRemoved(EntityUid uid, CloseQuarterCombatMasteryComponent component, ComponentRemove args)
+    {
+        RequestMeleeDamageRefresh(uid);
+    }
+
+    private static void OnCollectMeleeDamage(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
+    {
+        args.ConsiderDamage(ent.Comp.UnarmedDamage);
     }
 
     protected override void OnTemplateMatched(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
@@ -122,24 +143,18 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
 
     private void OnMeleeAttacked(Entity<DamageableComponent> ent, ref AttackedEvent args)
     {
-        var hasChanges = false;
-        var pending = new PendingMeleeDamageChange
-        {
-            Origin = args.User,
-            ExpiresAt = _timing.CurTime + PendingDamageTimeout,
-        };
-
         if (TryComp<CloseQuarterCombatMasteryComponent>(args.User, out var attackerCqc) &&
             IsUnarmedMeleeAttack(args))
         {
             var targetDown = IsEntityDown(ent.Owner);
-            var desiredDamage = targetDown
-                ? attackerCqc.UnarmedDownedTargetDamage
-                : attackerCqc.UnarmedDamage;
+            var bonusDamage = 0f;
+
+            if (targetDown)
+                bonusDamage += attackerCqc.UnarmedDownedTargetBonusDamage;
 
             if (IsEntityDown(args.User) && !targetDown)
             {
-                desiredDamage += attackerCqc.ProneAttackerBonusDamage;
+                bonusDamage += attackerCqc.ProneAttackerBonusDamage;
                 _stun.TryKnockdown(ent.Owner,
                     attackerCqc.ProneAttackerKnockdownDuration,
                     refresh: true,
@@ -148,60 +163,85 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
                     voluntary: true);
             }
 
-            pending.DesiredDamage = desiredDamage;
-            hasChanges = true;
+            if (bonusDamage > 0f)
+                AddUnarmedBonusDamage(ref args, attackerCqc, bonusDamage);
         }
+    }
 
-        if (TryComp<CloseQuarterCombatMasteryComponent>(ent.Owner, out var defenderCqc) &&
-            _random.Prob(defenderCqc.DefensiveMeleeNullifyChance))
-        {
-            pending.Nullify = true;
-            hasChanges = true;
-
-            if (HasRealActiveItem(args.User))
-            {
-                _stun.TryUpdateStunDuration(args.User, defenderCqc.DefensiveMeleeCounterKnockdownDuration);
-                _stun.TryKnockdown(args.User,
-                    defenderCqc.DefensiveMeleeCounterKnockdownDuration,
-                    refresh: true,
-                    autoStand: true,
-                    drop: true,
-                    force: true);
-            }
-        }
-
-        if (!hasChanges)
+    private void OnMeleeHit(Entity<MeleeWeaponComponent> ent, ref MeleeHitEvent args)
+    {
+        if (!args.IsHit || args.HitEntities.Count == 0)
             return;
 
-        _pendingMeleeDamage[ent.Owner] = pending;
+        foreach (var target in args.HitEntities)
+        {
+            if (!TryComp<CloseQuarterCombatMasteryComponent>(target, out var defenderCqc))
+                continue;
+
+            if (!_random.Prob(defenderCqc.DefensiveMeleeNullifyChance))
+                continue;
+
+            SetPendingDefensiveNullify(defenderCqc,
+                args.User,
+                nullifyDamage: true,
+                nullifyStamina: true);
+
+            PopupDefensiveNullify(target, args.User);
+            ApplyDefensiveCounter(defenderCqc, args.User);
+        }
+    }
+
+    private void OnDisarmed(Entity<CloseQuarterCombatMasteryComponent> ent, ref DisarmedEvent args)
+    {
+        if (args.Handled || !_random.Prob(ent.Comp.DefensiveMeleeNullifyChance))
+            return;
+
+        SetPendingDefensiveNullify(ent.Comp,
+            args.Source,
+            nullifyDamage: false,
+            nullifyStamina: true);
+
+        PopupDefensiveNullify(ent.Owner, args.Source);
+        ApplyDefensiveCounter(ent.Comp, args.Source);
+    }
+
+    private void OnBeforeStaminaDamage(Entity<CloseQuarterCombatMasteryComponent> ent, ref BeforeStaminaDamageEvent args)
+    {
+        if (!ent.Comp.PendingDefensiveMeleeNullifyStamina)
+            return;
+
+        if (IsPendingDefensiveNullifyExpired(ent.Comp))
+        {
+            ResetPendingDefensiveNullify(ent.Comp);
+            return;
+        }
+
+        args.Cancelled = true;
+        ent.Comp.PendingDefensiveMeleeNullifyStamina = false;
+        ClearPendingDefensiveNullifyIfUnused(ent.Comp);
     }
 
     private void OnDamageBeforeApply(Entity<DamageableComponent> ent, ref DamageBeforeApplyEvent args)
     {
-        if (!_pendingMeleeDamage.TryGetValue(ent.Owner, out var pending))
-            return;
-
-        if (_timing.CurTime > pending.ExpiresAt)
+        if (!TryComp<CloseQuarterCombatMasteryComponent>(ent.Owner, out var cqc) ||
+            !cqc.PendingDefensiveMeleeNullify)
         {
-            _pendingMeleeDamage.Remove(ent.Owner);
             return;
         }
 
-        if (args.Origin != pending.Origin)
-            return;
-
-        _pendingMeleeDamage.Remove(ent.Owner);
-
-        if (pending.Nullify)
+        if (IsPendingDefensiveNullifyExpired(cqc))
         {
-            args.Damage = new DamageSpecifier();
+            ResetPendingDefensiveNullify(cqc);
             return;
         }
 
-        if (pending.DesiredDamage is not { } desiredDamage)
+        if (args.Origin != cqc.PendingDefensiveMeleeOrigin)
             return;
 
-        args.Damage = ScaleDamageToTotal(args.Damage, desiredDamage);
+        args.Damage = new DamageSpecifier();
+
+        cqc.PendingDefensiveMeleeNullify = false;
+        ClearPendingDefensiveNullifyIfUnused(cqc);
     }
 
     private bool DoSlam(EntityUid user, EntityUid target, CloseQuarterCombatMasteryComponent component)
@@ -312,6 +352,15 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         _popup.PopupEntity(targetMessage, target, target);
     }
 
+    private void PopupDefensiveNullify(EntityUid defender, EntityUid attacker)
+    {
+        var defenderMessage = Loc.GetString("cqc-defensive-nullify-defender-popup");
+        var attackerMessage = Loc.GetString("cqc-defensive-nullify-attacker-popup");
+
+        _popup.PopupEntity(defenderMessage, defender, defender);
+        _popup.PopupEntity(attackerMessage, attacker, attacker);
+    }
+
     private void TryPickupTargetActiveItem(EntityUid user, EntityUid target)
     {
         if (!TryComp<HandsComponent>(target, out var targetHands))
@@ -376,26 +425,10 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         return args.Used == args.User;
     }
 
-    private static DamageSpecifier ScaleDamageToTotal(DamageSpecifier damage, float total)
+    private void AddUnarmedBonusDamage(ref AttackedEvent args, CloseQuarterCombatMasteryComponent component, float bonusDamage)
     {
-        if (total <= 0f || damage.Empty)
-            return new DamageSpecifier();
-
-        var currentTotal = damage.GetTotal();
-        if (currentTotal <= FixedPoint2.Zero)
-            return new DamageSpecifier();
-
-        var desiredTotal = FixedPoint2.New(total);
-        var multiplier = desiredTotal / currentTotal;
-
-        var scaled = new DamageSpecifier();
-        scaled.DamageDict.EnsureCapacity(damage.DamageDict.Count);
-        foreach (var (type, value) in damage.DamageDict)
-        {
-            scaled.DamageDict[type] = value * multiplier;
-        }
-
-        return scaled;
+        var bonus = new DamageSpecifier(_prototypeManager.Index(component.BluntDamageType), FixedPoint2.New(bonusDamage));
+        args.BonusDamage += bonus;
     }
 
     private static void ResetRestrainFollowup(CloseQuarterCombatMasteryComponent component)
@@ -406,11 +439,57 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         component.RestrainFollowupExpireAt = default;
     }
 
-    private sealed class PendingMeleeDamageChange
+    private static void ResetPendingDefensiveNullify(CloseQuarterCombatMasteryComponent component)
     {
-        public EntityUid? Origin;
-        public TimeSpan ExpiresAt;
-        public float? DesiredDamage;
-        public bool Nullify;
+        component.PendingDefensiveMeleeNullify = false;
+        component.PendingDefensiveMeleeNullifyStamina = false;
+        component.PendingDefensiveMeleeOrigin = null;
+        component.PendingDefensiveMeleeExpireAt = default;
+    }
+
+    private void SetPendingDefensiveNullify(
+        CloseQuarterCombatMasteryComponent component,
+        EntityUid origin,
+        bool nullifyDamage,
+        bool nullifyStamina)
+    {
+        component.PendingDefensiveMeleeOrigin = origin;
+        component.PendingDefensiveMeleeExpireAt = _timing.CurTime + component.DefensiveMeleeNullifyWindow;
+        component.PendingDefensiveMeleeNullify = nullifyDamage;
+        component.PendingDefensiveMeleeNullifyStamina = nullifyStamina;
+    }
+
+    private void ApplyDefensiveCounter(CloseQuarterCombatMasteryComponent component, EntityUid attacker)
+    {
+        if (!HasRealActiveItem(attacker))
+            return;
+
+        _stun.TryUpdateStunDuration(attacker, component.DefensiveMeleeCounterKnockdownDuration);
+        _stun.TryKnockdown(attacker,
+            component.DefensiveMeleeCounterKnockdownDuration,
+            refresh: true,
+            autoStand: true,
+            drop: true,
+            force: true);
+    }
+
+    private bool IsPendingDefensiveNullifyExpired(CloseQuarterCombatMasteryComponent component)
+    {
+        return _timing.CurTime > component.PendingDefensiveMeleeExpireAt;
+    }
+
+    private static void ClearPendingDefensiveNullifyIfUnused(CloseQuarterCombatMasteryComponent component)
+    {
+        if (component.PendingDefensiveMeleeNullify || component.PendingDefensiveMeleeNullifyStamina)
+            return;
+
+        component.PendingDefensiveMeleeOrigin = null;
+        component.PendingDefensiveMeleeExpireAt = default;
+    }
+
+    private void RequestMeleeDamageRefresh(EntityUid uid)
+    {
+        var ev = new CombatMasteryRefreshMeleeDamageEvent();
+        RaiseLocalEvent(uid, ref ev);
     }
 }

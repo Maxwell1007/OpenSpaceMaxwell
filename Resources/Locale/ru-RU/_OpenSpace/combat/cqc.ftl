@@ -10,3 +10,5 @@ cqc-consecutive-attacker-popup = Вы вывернули руку { $target }
 cqc-consecutive-target-popup = Вам вывернули руку
 cqc-followup-pressure-attacker-popup = Вы надавили на шею { $target }
 cqc-followup-pressure-target-popup = Вам сдавили шею!
+cqc-defensive-nullify-defender-popup = Вы отразили атаку
+cqc-defensive-nullify-attacker-popup = Ваша атака отражена

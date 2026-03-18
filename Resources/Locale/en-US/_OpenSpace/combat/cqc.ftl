@@ -10,3 +10,5 @@ cqc-consecutive-attacker-popup = You twisted { $target }'s arm
 cqc-consecutive-target-popup = Your arm was twisted
 cqc-followup-pressure-attacker-popup = You pressed on { $target }'s neck
 cqc-followup-pressure-target-popup = Your neck was crushed!
+cqc-defensive-nullify-defender-popup = You reflected the attack
+cqc-defensive-nullify-attacker-popup = Your attack was reflected
