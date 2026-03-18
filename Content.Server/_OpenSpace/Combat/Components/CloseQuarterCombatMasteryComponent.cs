@@ -55,9 +55,54 @@ public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICom
     public float ConsecutiveCqcStaminaDamage = 50f;
 
     [DataField]
+    public float UnarmedDamage = 13f;
+
+    [DataField]
+    public float UnarmedDownedTargetDamage = 18f;
+
+    [DataField]
+    public float ProneAttackerBonusDamage = 10f;
+
+    [DataField]
+    public TimeSpan ProneAttackerKnockdownDuration = TimeSpan.FromSeconds(1);
+
+    [DataField]
+    public float DefensiveMeleeNullifyChance = 0.75f;
+
+    [DataField]
+    public TimeSpan DefensiveMeleeCounterKnockdownDuration = TimeSpan.FromSeconds(4);
+
+    [DataField]
+    public TimeSpan RestrainFollowupWindow = TimeSpan.FromSeconds(5);
+
+    [DataField]
+    public TimeSpan RestrainFollowupSleepDuration = TimeSpan.FromSeconds(20);
+
+    [DataField]
+    public float RestrainFollowupBonusDamageChance = 0.5f;
+
+    [DataField]
+    public float RestrainFollowupBluntDamage = 5f;
+
+    [DataField]
+    public TimeSpan RestrainFollowupJitterDuration = TimeSpan.FromSeconds(5);
+
+    [DataField]
     private CombatMasteryTemplateCollection _templateCollection = new();
 
     public CombatMasteryTemplateCollection TemplateCollection => _templateCollection;
+
+    [ViewVariables]
+    public bool RestrainFollowupReady;
+
+    [ViewVariables]
+    public bool SkipNextComboResetForRestrain;
+
+    [ViewVariables]
+    public EntityUid? RestrainFollowupTarget;
+
+    [ViewVariables]
+    public TimeSpan RestrainFollowupExpireAt;
 
     public CloseQuarterCombatMasteryComponent()
     {
