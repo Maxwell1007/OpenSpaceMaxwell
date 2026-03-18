@@ -1,6 +1,7 @@
 using Content.Server._OpenSpace.Combat.Components;
 using Content.Shared.CombatMode;
 using Content.Shared.Hands.EntitySystems;
+using Content.Shared.Inventory.VirtualItem;
 using Content.Shared.Interaction;
 using Content.Shared.Interaction.Events;
 using Content.Shared.Mobs.Components;
@@ -62,7 +63,8 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
 
     private void HandleAttack(Entity<CombatMasteryComponent> ent, EntityUid target)
     {
-        if (_hands.TryGetActiveItem(ent.Owner, out _))
+        if (_hands.TryGetActiveItem(ent.Owner, out var held) &&
+            !IsPullingTargetInActiveHand(held.Value, target))
         {
             ClearCombo(ent.Comp);
             return;
@@ -70,6 +72,10 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
 
         UpdateCombo(ent, target, ComboMasteryKeys.attack);
     }
+
+    private bool IsPullingTargetInActiveHand(EntityUid held, EntityUid target) =>
+        TryComp<VirtualItemComponent>(held, out var virtualItem) &&
+        virtualItem.BlockingEntity == target;
 
     private void HandleGrab(Entity<CombatMasteryComponent> ent, EntityUid target)
     {
