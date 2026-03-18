@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Content.Server._OpenSpace.Combat.Systems;
+using Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 using Content.Shared.Damage;
 
-namespace Content.Server._OpenSpace.Combat.Components;
+namespace Content.Server._OpenSpace.Combat.CombatMastery.Components;
 
 [RegisterComponent, ComponentProtoName("CombatMastery")]
 [Access(typeof(CombatMasteryControllerSystem))]

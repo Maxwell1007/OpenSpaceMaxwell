@@ -1,6 +1,7 @@
 using System.Numerics;
-using Content.Server._OpenSpace.Combat;
-using Content.Server._OpenSpace.Combat.Components;
+using Content.Server._OpenSpace.Combat.CloseQuarterCombatMastery.Components;
+using Content.Server._OpenSpace.Combat.CombatMastery;
+using Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 using Content.Shared.Bed.Sleep;
 using Content.Shared.CombatMode;
 using Content.Shared.Damage;
@@ -30,7 +31,7 @@ using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
 using Robust.Shared.Timing;
 
-namespace Content.Server._OpenSpace.Combat.Systems;
+namespace Content.Server._OpenSpace.Combat.CloseQuarterCombatMastery.Systems;
 
 public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateCollectionSystem<CloseQuarterCombatMasteryComponent>
 {

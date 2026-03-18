@@ -1,4 +1,4 @@
-using Content.Server._OpenSpace.Combat.Components;
+using Content.Server._OpenSpace.Combat.CombatMastery.Components;
 using Content.Shared.CombatMode;
 using Content.Shared.Damage;
 using Content.Shared.FixedPoint;
@@ -10,7 +10,7 @@ using Content.Shared.Mobs.Components;
 using Content.Shared.Movement.Pulling.Events;
 using Content.Shared.Weapons.Melee;
 
-namespace Content.Server._OpenSpace.Combat.Systems;
+namespace Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 
 public sealed class CombatMasteryControllerSystem : EntitySystem
 {

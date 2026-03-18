@@ -1,9 +1,11 @@
 using System;
-using Content.Server._OpenSpace.Combat.Systems;
+using Content.Server._OpenSpace.Combat.CombatMastery;
+using Content.Server._OpenSpace.Combat.CombatMastery.Components;
+using Content.Server._OpenSpace.Combat.CorporateJudo.Systems;
 using Content.Shared.Damage.Prototypes;
 using Robust.Shared.Prototypes;
 
-namespace Content.Server._OpenSpace.Combat.Components;
+namespace Content.Server._OpenSpace.Combat.CorporateJudo.Components;
 
 [RegisterComponent, ComponentProtoName("CorporateJudoMastery")]
 [Access(typeof(CorporateJudoMasterySystem))]

@@ -1,0 +1,12 @@
+- type: entity
+  parent: ClothingBeltBase
+  id: ClothingBeltCorporateJudo
+  name: corporate judo belt
+  description: Do not forget to yell "Stop resisting!" while you break graytider's arm in half
+  components:
+  - type: Sprite
+    sprite: Clothing/Belt/champion.rsi
+  - type: Clothing
+    sprite: Clothing/Belt/champion.rsi
+    quickEquip: true
+  - type: CorporateJudoBelt

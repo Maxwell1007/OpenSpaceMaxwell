@@ -1,4 +1,4 @@
-namespace Content.Server._OpenSpace.Combat.Components;
+namespace Content.Server._OpenSpace.Combat.CombatMastery.Components;
 
 public interface ICombatMasteryTemplateProvider
 {

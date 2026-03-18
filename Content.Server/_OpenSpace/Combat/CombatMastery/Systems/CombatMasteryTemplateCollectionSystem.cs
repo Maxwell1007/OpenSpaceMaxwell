@@ -1,6 +1,6 @@
-using Content.Server._OpenSpace.Combat.Components;
+using Content.Server._OpenSpace.Combat.CombatMastery.Components;
 
-namespace Content.Server._OpenSpace.Combat.Systems;
+namespace Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 
 public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : EntitySystem
     where TComponent : Component, ICombatMasteryTemplateProvider

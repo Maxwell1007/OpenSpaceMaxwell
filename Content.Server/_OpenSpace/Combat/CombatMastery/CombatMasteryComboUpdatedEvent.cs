@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Content.Server._OpenSpace.Combat;
+namespace Content.Server._OpenSpace.Combat.CombatMastery;
 
 [ByRefEvent]
 public sealed class CombatMasteryComboUpdatedEvent : EntityEventArgs

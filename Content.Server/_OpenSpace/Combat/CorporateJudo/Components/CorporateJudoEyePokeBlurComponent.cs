@@ -1,7 +1,7 @@
 using System;
-using Content.Server._OpenSpace.Combat.Systems;
+using Content.Server._OpenSpace.Combat.CorporateJudo.Systems;
 
-namespace Content.Server._OpenSpace.Combat.Components;
+namespace Content.Server._OpenSpace.Combat.CorporateJudo.Components;
 
 [RegisterComponent]
 [Access(typeof(CorporateJudoMasterySystem))]

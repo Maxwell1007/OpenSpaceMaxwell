@@ -1,5 +1,7 @@
-using Content.Server._OpenSpace.Combat;
-using Content.Server._OpenSpace.Combat.Components;
+using Content.Server._OpenSpace.Combat.CombatMastery;
+using Content.Server._OpenSpace.Combat.CombatMastery.Components;
+using Content.Server._OpenSpace.Combat.CombatMastery.Systems;
+using Content.Server._OpenSpace.Combat.CorporateJudo.Components;
 using Content.Shared.Bed.Sleep;
 using Content.Shared.Damage;
 using Content.Shared.Damage.Components;
@@ -20,7 +22,7 @@ using Robust.Shared.Prototypes;
 using Robust.Shared.Timing;
 using LegacyStatusEffectsSystem = Content.Shared.StatusEffect.StatusEffectsSystem;
 
-namespace Content.Server._OpenSpace.Combat.Systems;
+namespace Content.Server._OpenSpace.Combat.CorporateJudo.Systems;
 
 public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollectionSystem<CorporateJudoMasteryComponent>
 {
