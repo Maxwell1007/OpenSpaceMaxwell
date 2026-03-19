@@ -9,7 +9,7 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
     {
         base.Initialize();
 
-        SubscribeLocalEvent<TComponent, CombatMasteryComboUpdatedEvent>(OnComboUpdated);
+        SubscribeLocalEvent<TComponent, CombatMasteryComboUpdatedEvent>(HandleComboUpdated);
     }
 
     public bool TryAddOrReplaceTemplate(Entity<TComponent> ent, CombatMasteryTemplate template)
@@ -30,8 +30,10 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
         return true;
     }
 
-    private void OnComboUpdated(Entity<TComponent> ent, ref CombatMasteryComboUpdatedEvent args)
+    private void HandleComboUpdated(Entity<TComponent> ent, ref CombatMasteryComboUpdatedEvent args)
     {
+        OnComboUpdated(ent, ref args);
+
         if (args.TemplateExecuted)
             return;
 
@@ -43,6 +45,12 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
 
         OnTemplateMatched(ent, args.Target, matchedTemplate);
         args.TemplateExecuted = true;
+    }
+
+    protected virtual void OnComboUpdated(Entity<TComponent> ent, ref CombatMasteryComboUpdatedEvent args)
+    {
+        if (args.TemplateExecuted)
+            return;
     }
 
     protected abstract void OnTemplateMatched(Entity<TComponent> ent, EntityUid target, CombatMasteryTemplate template);

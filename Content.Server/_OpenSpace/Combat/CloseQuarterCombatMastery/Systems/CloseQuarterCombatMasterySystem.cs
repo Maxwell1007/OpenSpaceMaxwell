@@ -62,7 +62,6 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, DisarmedEvent>(OnDisarmed, before: [typeof(SharedStaminaSystem)]);
         SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, BeforeStaminaDamageEvent>(OnBeforeStaminaDamage);
         SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, CombatMasteryComboUpdatedEvent>(OnComboUpdated);
         SubscribeLocalEvent<DamageableComponent, AttackedEvent>(OnMeleeAttacked);
         SubscribeLocalEvent<DamageableComponent, DamageBeforeApplyEvent>(OnDamageBeforeApply);
     }
@@ -128,8 +127,10 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         args.Cancel();
     }
 
-    private void OnComboUpdated(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryComboUpdatedEvent args)
+    protected override void OnComboUpdated(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryComboUpdatedEvent args)
     {
+        base.OnComboUpdated(ent, ref args);
+
         if (!ent.Comp.RestrainFollowupReady)
             return;
 
