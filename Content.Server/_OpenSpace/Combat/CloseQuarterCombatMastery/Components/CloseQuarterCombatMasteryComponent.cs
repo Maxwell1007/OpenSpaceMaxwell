@@ -3,6 +3,7 @@ using Content.Server._OpenSpace.Combat.CloseQuarterCombatMastery.Systems;
 using Content.Server._OpenSpace.Combat.CombatMastery;
 using Content.Server._OpenSpace.Combat.CombatMastery.Components;
 using Content.Shared.Damage.Prototypes;
+using Content.Shared._OpenSpace.Combat.CombatMastery;
 using Robust.Shared.Prototypes;
 
 namespace Content.Server._OpenSpace.Combat.CloseQuarterCombatMastery.Components;

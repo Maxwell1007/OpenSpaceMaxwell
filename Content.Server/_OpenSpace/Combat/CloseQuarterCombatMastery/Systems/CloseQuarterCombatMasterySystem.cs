@@ -24,6 +24,7 @@ using Content.Shared.Stunnable;
 using Content.Shared.Throwing;
 using Content.Shared.Weapons.Melee;
 using Content.Shared.Weapons.Melee.Events;
+using Content.Shared._OpenSpace.Combat.CombatMastery;
 using Content.Shared._Starlight.Medical.Damage;
 using Robust.Server.GameObjects;
 using Robust.Shared.Maths;
@@ -54,8 +55,6 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
     {
         base.Initialize();
 
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, ComponentStartup>(OnCqcStarted);
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, ComponentRemove>(OnCqcRemoved);
         SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, AttackAttemptEvent>(OnAttackAttempt,
             before: [typeof(CombatMasteryControllerSystem)]);
         SubscribeLocalEvent<MeleeWeaponComponent, MeleeHitEvent>(OnMeleeHit, before: [typeof(SharedStaminaSystem)]);
@@ -66,14 +65,14 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         SubscribeLocalEvent<DamageableComponent, DamageBeforeApplyEvent>(OnDamageBeforeApply);
     }
 
-    private void OnCqcStarted(EntityUid uid, CloseQuarterCombatMasteryComponent component, ComponentStartup args)
+    protected override void OnMasteryStarted(Entity<CloseQuarterCombatMasteryComponent> ent, ref ComponentStartup args)
     {
-        RequestMeleeDamageRefresh(uid);
+        RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    private void OnCqcRemoved(EntityUid uid, CloseQuarterCombatMasteryComponent component, ComponentRemove args)
+    protected override void OnMasteryStopped(Entity<CloseQuarterCombatMasteryComponent> ent, ref ComponentShutdown args)
     {
-        RequestMeleeDamageRefresh(uid);
+        RequestMeleeDamageRefresh(ent.Owner);
     }
 
     private static void OnCollectMeleeDamage(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
@@ -81,31 +80,40 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         args.ConsiderDamage(ent.Comp.UnarmedDamage);
     }
 
-    protected override void OnTemplateMatched(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
+    protected override bool OnTemplateMatched(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
     {
+        var executed = false;
+
         switch (template.Name)
         {
             case CloseQuarterCombatMasteryComponent.SlamTemplateName:
-                if (DoSlam(ent.Owner, target, ent.Comp))
+                executed = DoSlam(ent.Owner, target, ent.Comp);
+                if (executed)
                     PopupTechnique(ent.Owner, target, "cqc-slam-attacker-popup", "cqc-slam-target-popup", true);
                 break;
             case CloseQuarterCombatMasteryComponent.CQCKickTemplateName:
-                if (DoCQCKick(ent.Owner, target, ent.Comp))
+                executed = DoCQCKick(ent.Owner, target, ent.Comp);
+                if (executed)
                     PopupTechnique(ent.Owner, target, "cqc-kick-attacker-popup", "cqc-kick-target-popup");
                 break;
             case CloseQuarterCombatMasteryComponent.RestrainTemplateName:
-                if (DoRestrain(ent.Owner, target, ent.Comp))
+                executed = DoRestrain(ent.Owner, target, ent.Comp);
+                if (executed)
                     PopupTechnique(ent.Owner, target, "cqc-restrain-attacker-popup", "cqc-restrain-target-popup", true);
                 break;
             case CloseQuarterCombatMasteryComponent.PressureTemplateName:
-                if (DoPressure(ent.Owner, target, ent.Comp))
+                executed = DoPressure(ent.Owner, target, ent.Comp);
+                if (executed)
                     PopupTechnique(ent.Owner, target, "cqc-pressure-attacker-popup", "cqc-pressure-target-popup");
                 break;
             case CloseQuarterCombatMasteryComponent.ConsecutiveCQCTemplateName:
-                if (DoConsecutiveCqc(ent.Owner, target, ent.Comp))
+                executed = DoConsecutiveCqc(ent.Owner, target, ent.Comp);
+                if (executed)
                     PopupTechnique(ent.Owner, target, "cqc-consecutive-attacker-popup", "cqc-consecutive-target-popup", true);
                 break;
         }
+
+        return executed;
     }
 
     private void OnAttackAttempt(Entity<CloseQuarterCombatMasteryComponent> ent, ref AttackAttemptEvent args)

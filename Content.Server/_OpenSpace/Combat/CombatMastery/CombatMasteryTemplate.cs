@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Content.Shared._OpenSpace.Combat.CombatMastery;
 
 namespace Content.Server._OpenSpace.Combat.CombatMastery;
 

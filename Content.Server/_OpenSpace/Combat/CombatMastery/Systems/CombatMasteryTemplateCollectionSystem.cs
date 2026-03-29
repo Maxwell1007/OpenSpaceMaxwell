@@ -1,4 +1,5 @@
 using Content.Server._OpenSpace.Combat.CombatMastery.Components;
+using Content.Server._OpenSpace.Combat.CombatMastery.Hud;
 
 namespace Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 
@@ -10,6 +11,9 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
         base.Initialize();
 
         SubscribeLocalEvent<TComponent, CombatMasteryComboUpdatedEvent>(HandleComboUpdated);
+        SubscribeLocalEvent<TComponent, CombatMasteryActiveStateQueryEvent>(OnActiveStateQuery);
+        SubscribeLocalEvent<TComponent, ComponentStartup>(OnMasteryStartup);
+        SubscribeLocalEvent<TComponent, ComponentShutdown>(OnMasteryShutdown);
     }
 
     public bool TryAddOrReplaceTemplate(Entity<TComponent> ent, CombatMasteryTemplate template)
@@ -43,8 +47,24 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
         if (matchedTemplate == null)
             return;
 
-        OnTemplateMatched(ent, args.Target, matchedTemplate);
-        args.TemplateExecuted = true;
+        args.TemplateExecuted = OnTemplateMatched(ent, args.Target, matchedTemplate);
+    }
+
+    private static void OnActiveStateQuery(Entity<TComponent> ent, ref CombatMasteryActiveStateQueryEvent args)
+    {
+        args.HasActiveMastery = true;
+    }
+
+    private void OnMasteryStartup(Entity<TComponent> ent, ref ComponentStartup args)
+    {
+        RefreshHudState(ent.Owner);
+        OnMasteryStarted(ent, ref args);
+    }
+
+    private void OnMasteryShutdown(Entity<TComponent> ent, ref ComponentShutdown args)
+    {
+        RefreshHudState(ent.Owner);
+        OnMasteryStopped(ent, ref args);
     }
 
     protected virtual void OnComboUpdated(Entity<TComponent> ent, ref CombatMasteryComboUpdatedEvent args)
@@ -53,5 +73,19 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
             return;
     }
 
-    protected abstract void OnTemplateMatched(Entity<TComponent> ent, EntityUid target, CombatMasteryTemplate template);
+    protected virtual void OnMasteryStarted(Entity<TComponent> ent, ref ComponentStartup args)
+    {
+    }
+
+    protected virtual void OnMasteryStopped(Entity<TComponent> ent, ref ComponentShutdown args)
+    {
+    }
+
+    protected abstract bool OnTemplateMatched(Entity<TComponent> ent, EntityUid target, CombatMasteryTemplate template);
+
+    private void RefreshHudState(EntityUid uid)
+    {
+        var ev = new CombatMasteryHudRefreshEvent();
+        RaiseLocalEvent(uid, ref ev);
+    }
 }

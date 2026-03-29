@@ -3,6 +3,7 @@ using Content.Server._OpenSpace.Combat.CombatMastery;
 using Content.Server._OpenSpace.Combat.CombatMastery.Components;
 using Content.Server._OpenSpace.Combat.CorporateJudo.Systems;
 using Content.Shared.Damage.Prototypes;
+using Content.Shared._OpenSpace.Combat.CombatMastery;
 using Robust.Shared.Prototypes;
 
 namespace Content.Server._OpenSpace.Combat.CorporateJudo.Components;

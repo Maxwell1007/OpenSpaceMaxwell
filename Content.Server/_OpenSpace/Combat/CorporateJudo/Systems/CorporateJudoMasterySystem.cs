@@ -18,6 +18,7 @@ using Content.Shared.Popups;
 using Content.Shared.Standing;
 using Content.Shared.StatusEffectNew;
 using Content.Shared.Stunnable;
+using Content.Shared._OpenSpace.Combat.CombatMastery;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Timing;
 using LegacyStatusEffectsSystem = Content.Shared.StatusEffect.StatusEffectsSystem;
@@ -43,19 +44,17 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
     {
         base.Initialize();
 
-        SubscribeLocalEvent<CorporateJudoMasteryComponent, ComponentStartup>(OnStarted);
-        SubscribeLocalEvent<CorporateJudoMasteryComponent, ComponentRemove>(OnRemoved);
         SubscribeLocalEvent<CorporateJudoMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
     }
 
-    private void OnStarted(EntityUid uid, CorporateJudoMasteryComponent component, ComponentStartup args)
+    protected override void OnMasteryStarted(Entity<CorporateJudoMasteryComponent> ent, ref ComponentStartup args)
     {
-        RequestMeleeDamageRefresh(uid);
+        RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    private void OnRemoved(EntityUid uid, CorporateJudoMasteryComponent component, ComponentRemove args)
+    protected override void OnMasteryStopped(Entity<CorporateJudoMasteryComponent> ent, ref ComponentShutdown args)
     {
-        RequestMeleeDamageRefresh(uid);
+        RequestMeleeDamageRefresh(ent.Owner);
     }
 
     private static void OnCollectMeleeDamage(Entity<CorporateJudoMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
@@ -63,12 +62,15 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
         args.ConsiderDamage(ent.Comp.UnarmedDamage);
     }
 
-    protected override void OnTemplateMatched(Entity<CorporateJudoMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
+    protected override bool OnTemplateMatched(Entity<CorporateJudoMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
     {
+        var executed = false;
+
         switch (template.Name)
         {
             case CorporateJudoMasteryComponent.DiscombobulateTemplateName:
-                if (DoDiscombobulate(ent.Owner, target, ent.Comp))
+                executed = DoDiscombobulate(ent.Owner, target, ent.Comp);
+                if (executed)
                 {
                     PopupTechnique(ent.Owner, target,
                         "corporate-judo-discombobulate-attacker-popup",
@@ -76,7 +78,8 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
                 }
                 break;
             case CorporateJudoMasteryComponent.EyePokeTemplateName:
-                if (DoEyePoke(ent.Owner, target, ent.Comp))
+                executed = DoEyePoke(ent.Owner, target, ent.Comp);
+                if (executed)
                 {
                     PopupTechnique(ent.Owner, target,
                         "corporate-judo-eye-poke-attacker-popup",
@@ -84,7 +87,8 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
                 }
                 break;
             case CorporateJudoMasteryComponent.JudoThrowTemplateName:
-                if (DoJudoThrow(ent.Owner, target, ent.Comp))
+                executed = DoJudoThrow(ent.Owner, target, ent.Comp);
+                if (executed)
                 {
                     PopupTechnique(ent.Owner, target,
                         "corporate-judo-throw-attacker-popup",
@@ -92,7 +96,8 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
                 }
                 break;
             case CorporateJudoMasteryComponent.ArmbarTemplateName:
-                if (DoArmbar(ent.Owner, target, ent.Comp))
+                executed = DoArmbar(ent.Owner, target, ent.Comp);
+                if (executed)
                 {
                     PopupTechnique(ent.Owner, target,
                         "corporate-judo-armbar-attacker-popup",
@@ -100,7 +105,8 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
                 }
                 break;
             case CorporateJudoMasteryComponent.WheelThrowTemplateName:
-                if (DoWheelThrow(ent.Owner, target, ent.Comp))
+                executed = DoWheelThrow(ent.Owner, target, ent.Comp);
+                if (executed)
                 {
                     PopupTechnique(ent.Owner, target,
                         "corporate-judo-wheel-throw-attacker-popup",
@@ -108,7 +114,8 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
                 }
                 break;
             case CorporateJudoMasteryComponent.GoldenBlastTemplateName:
-                if (DoGoldenBlast(ent.Owner, target, ent.Comp))
+                executed = DoGoldenBlast(ent.Owner, target, ent.Comp);
+                if (executed)
                 {
                     PopupTechnique(ent.Owner, target,
                         "corporate-judo-golden-blast-attacker-popup",
@@ -116,6 +123,8 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
                 }
                 break;
         }
+
+        return executed;
     }
 
     private bool DoDiscombobulate(EntityUid user, EntityUid target, CorporateJudoMasteryComponent component)

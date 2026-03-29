@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Content.Server._OpenSpace.Combat.CombatMastery.Systems;
+using Content.Shared._OpenSpace.Combat.CombatMastery;
 using Content.Shared.Damage;
 
 namespace Content.Server._OpenSpace.Combat.CombatMastery.Components;
@@ -9,36 +10,29 @@ namespace Content.Server._OpenSpace.Combat.CombatMastery.Components;
 [Access(typeof(CombatMasteryControllerSystem))]
 public sealed partial class CombatMasteryComponent : Component
 {
-    [DataField]
-    public int MaxComboLength = 12;
+    [DataField] public int MaxComboLength = 12;
 
-    [DataField]
-    public List<ComboMasteryKeys> CombatMasteryCurrentCombo = new();
+    [DataField] public List<ComboMasteryKeys> CombatMasteryCurrentCombo = new();
 
-    [DataField]
-    public EntityUid? CurrentTarget;
+    [DataField] public EntityUid? CurrentTarget;
 
-    [DataField]
-    public CombatMasteryTemplateCollection TemplateCollection = new();
+    [DataField] public CombatMasteryTemplateCollection TemplateCollection = new();
 
-    [ViewVariables]
-    public DamageSpecifier? OriginalUnarmedMeleeDamage;
+    [ViewVariables] public DamageSpecifier? OriginalUnarmedMeleeDamage;
 
-    [ViewVariables]
-    public bool PendingMeleeDamageRefresh;
+    [ViewVariables] public bool PendingMeleeDamageRefresh;
+
+    [ViewVariables] public bool PendingHudStateRefresh;
 }
 
 [DataDefinition]
 public sealed partial class CombatMasteryTemplateCollection
 {
-    [DataField]
-    private List<CombatMasteryTemplate> _templates = [];
+    [DataField] private List<CombatMasteryTemplate> _templates = [];
 
-    [NonSerialized]
-    private readonly Dictionary<ComboMasteryKeys, List<CombatMasteryTemplate>> _templatesByTailKey = [];
+    [NonSerialized] private readonly Dictionary<ComboMasteryKeys, List<CombatMasteryTemplate>> _templatesByTailKey = [];
 
-    [NonSerialized]
-    private bool _lookupDirty = true;
+    [NonSerialized] private bool _lookupDirty = true;
 
     public bool TryFindTailMatch(IReadOnlyList<ComboMasteryKeys> combo, out CombatMasteryTemplate? matchedTemplate)
     {
@@ -116,7 +110,7 @@ public sealed partial class CombatMasteryTemplateCollection
 
         foreach (var bucket in _templatesByTailKey.Values)
         {
-            bucket.Sort(static (left, right) => left.Sequence.Count.CompareTo(right.Sequence.Count));
+            bucket.Sort(static (left, right) => right.Sequence.Count.CompareTo(left.Sequence.Count));
         }
 
         _lookupDirty = false;

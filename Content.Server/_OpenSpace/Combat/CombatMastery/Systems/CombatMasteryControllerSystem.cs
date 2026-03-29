@@ -1,4 +1,5 @@
 using Content.Server._OpenSpace.Combat.CombatMastery.Components;
+using Content.Server._OpenSpace.Combat.CombatMastery.Hud;
 using Content.Shared.CombatMode;
 using Content.Shared.Damage;
 using Content.Shared.FixedPoint;
@@ -9,6 +10,8 @@ using Content.Shared.Interaction.Events;
 using Content.Shared.Mobs.Components;
 using Content.Shared.Movement.Pulling.Events;
 using Content.Shared.Weapons.Melee;
+using Content.Shared._OpenSpace.Combat.CombatMastery;
+using Content.Shared._OpenSpace.Combat.CombatMastery.Hud.Components;
 
 namespace Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 
@@ -22,16 +25,26 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         base.Initialize();
 
         SubscribeLocalEvent<CombatMasteryComponent, ComponentInit>(OnCombatMasteryInit);
+        SubscribeLocalEvent<CombatMasteryComponent, ComponentShutdown>(OnCombatMasteryShutdown);
         SubscribeLocalEvent<CombatMasteryComponent, UserInteractHandEvent>(OnUserInteractHand);
         SubscribeLocalEvent<CombatMasteryComponent, AttackAttemptEvent>(OnAttackAttempt);
-        SubscribeLocalEvent<CombatMasteryComponent, PullStartedMessage>(OnPullStarted);
+        SubscribeLocalEvent<CombatMasteryComponent, CombatGrabPerformedEvent>(OnCombatGrabPerformed);
+        SubscribeLocalEvent<CombatMasteryComponent, CombatMasteryHudRefreshEvent>(OnHudRefreshRequested);
         SubscribeLocalEvent<CombatMasteryComponent, CombatMasteryRefreshMeleeDamageEvent>(OnMeleeDamageRefreshRequested);
     }
 
     private void OnCombatMasteryInit(Entity<CombatMasteryComponent> ent, ref ComponentInit args)
     {
         ent.Comp.PendingMeleeDamageRefresh = false;
+        ent.Comp.PendingHudStateRefresh = false;
+        EnsureComp<CombatMasteryComboHudComponent>(ent.Owner);
         RefreshMeleeDamage(ent);
+        SyncHudState(ent);
+    }
+
+    private void OnCombatMasteryShutdown(Entity<CombatMasteryComponent> ent, ref ComponentShutdown args)
+    {
+        RemComp<CombatMasteryComboHudComponent>(ent.Owner);
     }
 
     private void OnUserInteractHand(Entity<CombatMasteryComponent> ent, ref UserInteractHandEvent args)
@@ -56,12 +69,12 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         HandleAttack(ent, target);
     }
 
-    private void OnPullStarted(Entity<CombatMasteryComponent> ent, ref PullStartedMessage args)
+    private void OnCombatGrabPerformed(Entity<CombatMasteryComponent> ent, ref CombatGrabPerformedEvent args)
     {
         if (args.PullerUid != ent.Owner)
             return;
 
-        HandleGrab(ent, args.PulledUid);
+        args.SuppressPopup = HandleGrab(ent, args.TargetUid);
     }
 
     private void HandleHelpInteraction(Entity<CombatMasteryComponent> ent, EntityUid target)
@@ -77,7 +90,7 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         if (_hands.TryGetActiveItem(ent.Owner, out var held) &&
             !IsPullingTargetInActiveHand(held.Value, target))
         {
-            ClearCombo(ent.Comp);
+            ClearCombo(ent);
             return;
         }
 
@@ -88,12 +101,12 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         TryComp<VirtualItemComponent>(held, out var virtualItem) &&
         virtualItem.BlockingEntity == target;
 
-    private void HandleGrab(Entity<CombatMasteryComponent> ent, EntityUid target)
+    private bool HandleGrab(Entity<CombatMasteryComponent> ent, EntityUid target)
     {
         if (!_combatMode.IsInCombatMode(ent.Owner) || !HasComp<MobStateComponent>(target))
-            return;
+            return false;
 
-        UpdateCombo(ent, target, ComboMasteryKeys.grab);
+        return UpdateCombo(ent, target, ComboMasteryKeys.grab);
     }
 
     private void HandleDisarm(Entity<CombatMasteryComponent> ent, EntityUid target)
@@ -104,7 +117,7 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         UpdateCombo(ent, target, ComboMasteryKeys.disarm);
     }
 
-    private void UpdateCombo(Entity<CombatMasteryComponent> ent, EntityUid target, ComboMasteryKeys key)
+    private bool UpdateCombo(Entity<CombatMasteryComponent> ent, EntityUid target, ComboMasteryKeys key)
     {
         var component = ent.Comp;
         if (component.CurrentTarget != target)
@@ -118,25 +131,35 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         }
 
         component.CombatMasteryCurrentCombo.Add(key);
-        CheckTemplates(ent);
+        var executed = CheckTemplates(ent);
+        SyncHudState(ent);
+        return executed;
     }
 
-    private void CheckTemplates(Entity<CombatMasteryComponent> ent)
+    private bool CheckTemplates(Entity<CombatMasteryComponent> ent)
     {
         if (ent.Comp.CurrentTarget is not { } target || ent.Comp.CombatMasteryCurrentCombo.Count == 0)
-            return;
+            return false;
 
         var ev = new CombatMasteryComboUpdatedEvent(target, ent.Comp.CombatMasteryCurrentCombo);
         RaiseLocalEvent(ent.Owner, ref ev);
 
         if (ev.TemplateExecuted)
             ent.Comp.CombatMasteryCurrentCombo.Clear();
+
+        return ev.TemplateExecuted;
     }
 
-    private static void ClearCombo(CombatMasteryComponent component)
+    private void ClearCombo(Entity<CombatMasteryComponent> ent)
     {
-        component.CombatMasteryCurrentCombo.Clear();
-        component.CurrentTarget = null;
+        ent.Comp.CombatMasteryCurrentCombo.Clear();
+        ent.Comp.CurrentTarget = null;
+        SyncHudState(ent);
+    }
+
+    private void OnHudRefreshRequested(Entity<CombatMasteryComponent> ent, ref CombatMasteryHudRefreshEvent args)
+    {
+        ent.Comp.PendingHudStateRefresh = true;
     }
 
     private void OnMeleeDamageRefreshRequested(Entity<CombatMasteryComponent> ent, ref CombatMasteryRefreshMeleeDamageEvent args)
@@ -195,11 +218,42 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         var query = EntityQueryEnumerator<CombatMasteryComponent>();
         while (query.MoveNext(out var uid, out var comp))
         {
-            if (!comp.PendingMeleeDamageRefresh)
-                continue;
+            if (comp.PendingHudStateRefresh)
+            {
+                comp.PendingHudStateRefresh = false;
+                SyncHudState((uid, comp));
+            }
 
-            comp.PendingMeleeDamageRefresh = false;
-            RefreshMeleeDamage((uid, comp));
+            if (comp.PendingMeleeDamageRefresh)
+            {
+                comp.PendingMeleeDamageRefresh = false;
+                RefreshMeleeDamage((uid, comp));
+            }
         }
+    }
+
+    private bool HasActiveMastery(EntityUid uid)
+    {
+        var query = new CombatMasteryActiveStateQueryEvent();
+        RaiseLocalEvent(uid, ref query);
+        return query.HasActiveMastery;
+    }
+
+    private void SyncHudState(Entity<CombatMasteryComponent> ent)
+    {
+        var hud = EnsureComp<CombatMasteryComboHudComponent>(ent.Owner);
+        hud.HasActiveMastery = HasActiveMastery(ent.Owner);
+        hud.VisibleCombo.Clear();
+
+        if (hud.HasActiveMastery && ent.Comp.CombatMasteryCurrentCombo.Count > 0)
+        {
+            var startIndex = Math.Max(0, ent.Comp.CombatMasteryCurrentCombo.Count - CombatMasteryComboHudComponent.MaxVisibleKeys);
+            for (var index = startIndex; index < ent.Comp.CombatMasteryCurrentCombo.Count; index++)
+            {
+                hud.VisibleCombo.Add(ent.Comp.CombatMasteryCurrentCombo[index]);
+            }
+        }
+
+        Dirty(ent.Owner, hud);
     }
 }

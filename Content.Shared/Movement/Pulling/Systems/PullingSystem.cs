@@ -857,10 +857,12 @@ public sealed class PullingSystem : EntitySystem
                     {
                         if (_timing.CurTime < pullerComp.NextMediumGrab)
                             return true;
-                        DoGrabStage(pullerUid, pullable.Owner, "pulling-combat-medium-popup");
                         pullerComp.GrabStage = GrabStage.Medium;
                         pullerComp.NextHeavyGrab = _timing.CurTime + pullerComp.HeavyGrabCooldown;
                         pullable.Comp.PullerGrabStage = GrabStage.Medium;
+                        var grabEvent = new CombatGrabPerformedEvent(pullerUid, pullable.Owner, pullerComp.GrabStage);
+                        RaiseLocalEvent(pullerUid, ref grabEvent);
+                        DoGrabStage(pullerUid, pullable.Owner, "pulling-combat-medium-popup", showPopup: !grabEvent.SuppressPopup);
                         Dirty(pullerUid, pullerComp);
                         Dirty(pullable.Owner, pullable.Comp);
                         _modifierSystem.RefreshMovementSpeedModifiers(pullerUid);
@@ -873,10 +875,12 @@ public sealed class PullingSystem : EntitySystem
                     {
                         if (_timing.CurTime < pullerComp.NextHeavyGrab)
                             return true;
-                        DoGrabStage(pullerUid, pullable.Owner, "pulling-combat-heavy-popup");
                         pullerComp.GrabStage = GrabStage.Heavy;
                         pullerComp.NextChokeGrab = _timing.CurTime + pullerComp.ChokeGrabCooldown;
                         pullable.Comp.PullerGrabStage = GrabStage.Heavy;
+                        var grabEvent = new CombatGrabPerformedEvent(pullerUid, pullable.Owner, pullerComp.GrabStage);
+                        RaiseLocalEvent(pullerUid, ref grabEvent);
+                        DoGrabStage(pullerUid, pullable.Owner, "pulling-combat-heavy-popup", showPopup: !grabEvent.SuppressPopup);
                         Dirty(pullerUid, pullerComp);
                         Dirty(pullable.Owner, pullable.Comp);
                         _modifierSystem.RefreshMovementSpeedModifiers(pullerUid);
@@ -889,10 +893,12 @@ public sealed class PullingSystem : EntitySystem
                     {
                         if (_timing.CurTime < pullerComp.NextChokeGrab)
                             return true;
-                        DoGrabStage(pullerUid, pullable.Owner, "pulling-combat-choke-popup");
                         pullerComp.GrabStage = GrabStage.Choke;
                         EnsureChokeState(pullerUid, pullable.Owner);
                         pullable.Comp.PullerGrabStage = GrabStage.Choke;
+                        var grabEvent = new CombatGrabPerformedEvent(pullerUid, pullable.Owner, pullerComp.GrabStage);
+                        RaiseLocalEvent(pullerUid, ref grabEvent);
+                        DoGrabStage(pullerUid, pullable.Owner, "pulling-combat-choke-popup", showPopup: !grabEvent.SuppressPopup);
                         Dirty(pullerUid, pullerComp);
                         Dirty(pullable.Owner, pullable.Comp);
                         _modifierSystem.RefreshMovementSpeedModifiers(pullerUid);
@@ -1029,10 +1035,12 @@ public sealed class PullingSystem : EntitySystem
 
         if (CanCombatGrab(pullerUid, pullableUid))
         {
-            DoGrabStage(pullerUid, pullableUid, "pulling-combat-medium-popup");
             pullerComp.GrabStage = GrabStage.Medium;
             pullerComp.NextHeavyGrab = _timing.CurTime + pullerComp.HeavyGrabCooldown;
             pullableComp.PullerGrabStage = GrabStage.Medium;
+            var grabEvent = new CombatGrabPerformedEvent(pullerUid, pullableUid, pullerComp.GrabStage);
+            RaiseLocalEvent(pullerUid, ref grabEvent);
+            DoGrabStage(pullerUid, pullableUid, "pulling-combat-medium-popup", showPopup: !grabEvent.SuppressPopup);
             Dirty(pullerUid, pullerComp);
             Dirty(pullableUid, pullableComp);
             _modifierSystem.RefreshMovementSpeedModifiers(pullerUid);
@@ -1076,17 +1084,21 @@ public sealed class PullingSystem : EntitySystem
     }
 
     // OpenSpace-Edit Start
-    private void DoGrabStage(EntityUid pullerUid, EntityUid targetUid, string locKey, bool playSound = true)
+    private void DoGrabStage(EntityUid pullerUid, EntityUid targetUid, string locKey, bool playSound = true, bool showPopup = true)
     {
-        var popupMessage = Loc.GetString(locKey,
-            ("target", Identity.Entity(targetUid, EntityManager)));
-        if (_netMan.IsServer)
-            _popup.PopupEntity(popupMessage, pullerUid, pullerUid);
-        var targetKey = locKey.Replace("-popup", "-target-popup");
-        var targetMessage = Loc.GetString(targetKey,
-            ("puller", Identity.Entity(pullerUid, EntityManager)));
-        if (_netMan.IsServer)
-            _popup.PopupEntity(targetMessage, targetUid, targetUid);
+        if (showPopup)
+        {
+            var popupMessage = Loc.GetString(locKey,
+                ("target", Identity.Entity(targetUid, EntityManager)));
+            if (_netMan.IsServer)
+                _popup.PopupEntity(popupMessage, pullerUid, pullerUid);
+            var targetKey = locKey.Replace("-popup", "-target-popup");
+            var targetMessage = Loc.GetString(targetKey,
+                ("puller", Identity.Entity(pullerUid, EntityManager)));
+            if (_netMan.IsServer)
+                _popup.PopupEntity(targetMessage, targetUid, targetUid);
+        }
+
         _outlineFlash.RaiseEffect(targetUid, pullerUid);
         _colorFlash.RaiseEffect(Color.Yellow, new List<EntityUid> { targetUid },
             Filter.Pvs(targetUid, entityManager: EntityManager));

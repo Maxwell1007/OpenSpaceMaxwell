@@ -1,4 +1,4 @@
-namespace Content.Server._OpenSpace.Combat.CombatMastery;
+namespace Content.Shared._OpenSpace.Combat.CombatMastery;
 
 public enum ComboMasteryKeys : byte
 {
