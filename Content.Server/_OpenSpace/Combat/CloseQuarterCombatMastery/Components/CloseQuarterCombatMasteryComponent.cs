@@ -124,34 +124,19 @@ public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICom
 
     public CloseQuarterCombatMasteryComponent()
     {
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = SlamTemplateName,
-            Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.attack],
-        });
+        AddTemplate(SlamTemplateName, ComboMasteryKeys.grab, ComboMasteryKeys.attack);
+        AddTemplate(CQCKickTemplateName, ComboMasteryKeys.attack, ComboMasteryKeys.attack);
+        AddTemplate(RestrainTemplateName, ComboMasteryKeys.grab, ComboMasteryKeys.grab);
+        AddTemplate(PressureTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.grab);
+        AddTemplate(ConsecutiveCQCTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.attack);
+    }
 
+    private void AddTemplate(string name, params ComboMasteryKeys[] sequence)
+    {
         _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
         {
-            Name = CQCKickTemplateName,
-            Sequence = [ComboMasteryKeys.attack, ComboMasteryKeys.attack],
-        });
-
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = RestrainTemplateName,
-            Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.grab],
-        });
-
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = PressureTemplateName,
-            Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.grab],
-        });
-
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = ConsecutiveCQCTemplateName,
-            Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.attack],
+            Name = name,
+            Sequence = [.. sequence],
         });
     }
 }

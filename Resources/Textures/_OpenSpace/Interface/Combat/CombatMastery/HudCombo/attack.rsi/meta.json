@@ -1,10 +1,10 @@
 {
   "version": 1,
   "license": "CC-BY-SA-3.0",
-  "copyright": "Taken from Paradise Station 13 at commit cca2ab2338b5b054e836b62744894ed822921cc6",
+  "copyright": "by wizden",
   "size": {
-    "x": 32,
-    "y": 32
+    "x": 16,
+    "y": 16
   },
   "states": [
     {

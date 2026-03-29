@@ -3,38 +3,28 @@ using Content.Server._OpenSpace.Combat.CombatMastery.Components;
 using Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 using Content.Server._OpenSpace.Combat.CorporateJudo.Components;
 using Content.Shared.Bed.Sleep;
-using Content.Shared.Damage;
 using Content.Shared.Damage.Components;
 using Content.Shared.Damage.Systems;
 using Content.Shared.Eye.Blinding.Components;
 using Content.Shared.Eye.Blinding.Systems;
-using Content.Shared.FixedPoint;
 using Content.Shared.Flash.Components;
 using Content.Shared.Hands.EntitySystems;
-using Content.Shared.IdentityManagement;
 using Content.Shared.Movement.Pulling.Components;
 using Content.Shared.Movement.Systems;
-using Content.Shared.Popups;
-using Content.Shared.Standing;
 using Content.Shared.StatusEffectNew;
 using Content.Shared.Stunnable;
 using Content.Shared._OpenSpace.Combat.CombatMastery;
-using Robust.Shared.Prototypes;
 using Robust.Shared.Timing;
 using LegacyStatusEffectsSystem = Content.Shared.StatusEffect.StatusEffectsSystem;
 
 namespace Content.Server._OpenSpace.Combat.CorporateJudo.Systems;
 
-public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollectionSystem<CorporateJudoMasteryComponent>
+public sealed class CorporateJudoMasterySystem : CombatMasteryTechniqueSystem<CorporateJudoMasteryComponent>
 {
     [Dependency] private readonly BlindableSystem _blindable = default!;
-    [Dependency] private readonly DamageableSystem _damageable = default!;
     [Dependency] private readonly SharedHandsSystem _hands = default!;
     [Dependency] private readonly LegacyStatusEffectsSystem _legacyStatusEffects = default!;
     [Dependency] private readonly MovementModStatusSystem _movement = default!;
-    [Dependency] private readonly SharedPopupSystem _popup = default!;
-    [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
-    [Dependency] private readonly StandingStateSystem _standing = default!;
     [Dependency] private readonly SharedStaminaSystem _stamina = default!;
     [Dependency] private readonly StatusEffectsSystem _statusEffects = default!;
     [Dependency] private readonly SharedStunSystem _stun = default!;
@@ -64,67 +54,23 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
 
     protected override bool OnTemplateMatched(Entity<CorporateJudoMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
     {
-        var executed = false;
-
         switch (template.Name)
         {
             case CorporateJudoMasteryComponent.DiscombobulateTemplateName:
-                executed = DoDiscombobulate(ent.Owner, target, ent.Comp);
-                if (executed)
-                {
-                    PopupTechnique(ent.Owner, target,
-                        "corporate-judo-discombobulate-attacker-popup",
-                        "corporate-judo-discombobulate-target-popup");
-                }
-                break;
+                return TryExecuteDiscombobulate(ent, target);
             case CorporateJudoMasteryComponent.EyePokeTemplateName:
-                executed = DoEyePoke(ent.Owner, target, ent.Comp);
-                if (executed)
-                {
-                    PopupTechnique(ent.Owner, target,
-                        "corporate-judo-eye-poke-attacker-popup",
-                        "corporate-judo-eye-poke-target-popup");
-                }
-                break;
+                return TryExecuteEyePoke(ent, target);
             case CorporateJudoMasteryComponent.JudoThrowTemplateName:
-                executed = DoJudoThrow(ent.Owner, target, ent.Comp);
-                if (executed)
-                {
-                    PopupTechnique(ent.Owner, target,
-                        "corporate-judo-throw-attacker-popup",
-                        "corporate-judo-throw-target-popup");
-                }
-                break;
+                return TryExecuteJudoThrow(ent, target);
             case CorporateJudoMasteryComponent.ArmbarTemplateName:
-                executed = DoArmbar(ent.Owner, target, ent.Comp);
-                if (executed)
-                {
-                    PopupTechnique(ent.Owner, target,
-                        "corporate-judo-armbar-attacker-popup",
-                        "corporate-judo-armbar-target-popup");
-                }
-                break;
+                return TryExecuteArmbar(ent, target);
             case CorporateJudoMasteryComponent.WheelThrowTemplateName:
-                executed = DoWheelThrow(ent.Owner, target, ent.Comp);
-                if (executed)
-                {
-                    PopupTechnique(ent.Owner, target,
-                        "corporate-judo-wheel-throw-attacker-popup",
-                        "corporate-judo-wheel-throw-target-popup");
-                }
-                break;
+                return TryExecuteWheelThrow(ent, target);
             case CorporateJudoMasteryComponent.GoldenBlastTemplateName:
-                executed = DoGoldenBlast(ent.Owner, target, ent.Comp);
-                if (executed)
-                {
-                    PopupTechnique(ent.Owner, target,
-                        "corporate-judo-golden-blast-attacker-popup",
-                        "corporate-judo-golden-blast-target-popup");
-                }
-                break;
+                return TryExecuteGoldenBlast(ent, target);
         }
 
-        return executed;
+        return false;
     }
 
     private bool DoDiscombobulate(EntityUid user, EntityUid target, CorporateJudoMasteryComponent component)
@@ -147,7 +93,7 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
             component.EyePokeBlindDuration);
 
         ApplyEyePokeBlur(target, component);
-        ApplyBluntDamage(user, target, component, component.EyePokeBluntDamage);
+        ApplyBluntDamage(user, target, component.BluntDamageType, component.EyePokeBluntDamage);
         return true;
     }
 
@@ -258,37 +204,6 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
             voluntary: false);
     }
 
-    private void ApplyBluntDamage(EntityUid user, EntityUid target, CorporateJudoMasteryComponent component, float amount)
-    {
-        if (!TryComp<DamageableComponent>(target, out _))
-            return;
-
-        var bluntDamage = new DamageSpecifier(_prototypeManager.Index(component.BluntDamageType), FixedPoint2.New(amount));
-        _damageable.TryChangeDamage(target, bluntDamage, ignoreResistances: true, origin: user);
-    }
-
-    private void PopupTechnique(EntityUid user, EntityUid target, string attackerLocKey, string targetLocKey)
-    {
-        var attackerMessage = Loc.GetString(attackerLocKey, ("target", Identity.Entity(target, EntityManager)));
-        var targetMessage = Loc.GetString(targetLocKey);
-
-        _popup.PopupEntity(attackerMessage, user, user);
-        _popup.PopupEntity(targetMessage, target, target);
-    }
-
-    private bool IsEntityDown(EntityUid uid)
-    {
-        return _standing.IsDown(uid)
-               || HasComp<KnockedDownComponent>(uid)
-               || HasComp<SleepingComponent>(uid);
-    }
-
-    private void RequestMeleeDamageRefresh(EntityUid uid)
-    {
-        var ev = new CombatMasteryRefreshMeleeDamageEvent();
-        RaiseLocalEvent(uid, ref ev);
-    }
-
     public override void Update(float frameTime)
     {
         base.Update(frameTime);
@@ -309,5 +224,77 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTemplateCollection
 
             RemCompDeferred<CorporateJudoEyePokeBlurComponent>(uid);
         }
+    }
+
+    private bool TryExecuteDiscombobulate(Entity<CorporateJudoMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoDiscombobulate(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target,
+            "corporate-judo-discombobulate-attacker-popup",
+            "corporate-judo-discombobulate-target-popup",
+            includeTargetName: true);
+        return true;
+    }
+
+    private bool TryExecuteEyePoke(Entity<CorporateJudoMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoEyePoke(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target,
+            "corporate-judo-eye-poke-attacker-popup",
+            "corporate-judo-eye-poke-target-popup",
+            includeTargetName: true);
+        return true;
+    }
+
+    private bool TryExecuteJudoThrow(Entity<CorporateJudoMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoJudoThrow(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target,
+            "corporate-judo-throw-attacker-popup",
+            "corporate-judo-throw-target-popup",
+            includeTargetName: true);
+        return true;
+    }
+
+    private bool TryExecuteArmbar(Entity<CorporateJudoMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoArmbar(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target,
+            "corporate-judo-armbar-attacker-popup",
+            "corporate-judo-armbar-target-popup",
+            includeTargetName: true);
+        return true;
+    }
+
+    private bool TryExecuteWheelThrow(Entity<CorporateJudoMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoWheelThrow(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target,
+            "corporate-judo-wheel-throw-attacker-popup",
+            "corporate-judo-wheel-throw-target-popup",
+            includeTargetName: true);
+        return true;
+    }
+
+    private bool TryExecuteGoldenBlast(Entity<CorporateJudoMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoGoldenBlast(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target,
+            "corporate-judo-golden-blast-attacker-popup",
+            "corporate-judo-golden-blast-target-popup",
+            includeTargetName: true);
+        return true;
     }
 }

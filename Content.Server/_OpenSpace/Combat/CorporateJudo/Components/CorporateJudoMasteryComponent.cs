@@ -86,54 +86,33 @@ public sealed partial class CorporateJudoMasteryComponent : Component, ICombatMa
 
     public CorporateJudoMasteryComponent()
     {
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = DiscombobulateTemplateName,
-            Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.grab],
-        });
+        AddTemplate(DiscombobulateTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.grab);
+        AddTemplate(EyePokeTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.attack);
+        AddTemplate(JudoThrowTemplateName, ComboMasteryKeys.grab, ComboMasteryKeys.disarm);
+        AddTemplate(ArmbarTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.grab);
+        AddTemplate(WheelThrowTemplateName, ComboMasteryKeys.grab, ComboMasteryKeys.disarm, ComboMasteryKeys.attack);
+        AddTemplate(
+            GoldenBlastTemplateName,
+            ComboMasteryKeys.help,
+            ComboMasteryKeys.disarm,
+            ComboMasteryKeys.help,
+            ComboMasteryKeys.grab,
+            ComboMasteryKeys.disarm,
+            ComboMasteryKeys.disarm,
+            ComboMasteryKeys.grab,
+            ComboMasteryKeys.help,
+            ComboMasteryKeys.disarm,
+            ComboMasteryKeys.disarm,
+            ComboMasteryKeys.grab,
+            ComboMasteryKeys.help);
+    }
 
+    private void AddTemplate(string name, params ComboMasteryKeys[] sequence)
+    {
         _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
         {
-            Name = EyePokeTemplateName,
-            Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.attack],
-        });
-
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = JudoThrowTemplateName,
-            Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.disarm],
-        });
-
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = ArmbarTemplateName,
-            Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.grab],
-        });
-
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = WheelThrowTemplateName,
-            Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.disarm, ComboMasteryKeys.attack],
-        });
-
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = GoldenBlastTemplateName,
-            Sequence =
-            [
-                ComboMasteryKeys.help,
-                ComboMasteryKeys.disarm,
-                ComboMasteryKeys.help,
-                ComboMasteryKeys.grab,
-                ComboMasteryKeys.disarm,
-                ComboMasteryKeys.disarm,
-                ComboMasteryKeys.grab,
-                ComboMasteryKeys.help,
-                ComboMasteryKeys.disarm,
-                ComboMasteryKeys.disarm,
-                ComboMasteryKeys.grab,
-                ComboMasteryKeys.help
-            ],
+            Name = name,
+            Sequence = [.. sequence],
         });
     }
 }

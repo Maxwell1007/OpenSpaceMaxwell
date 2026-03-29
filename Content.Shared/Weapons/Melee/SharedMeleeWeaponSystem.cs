@@ -23,6 +23,7 @@ using Content.Shared.Inventory.VirtualItem;
 using Content.Shared.Item.ItemToggle.Components;
 using Content.Shared.Mobs.Components;
 using Content.Shared.Mobs.Systems;
+using Content.Shared._OpenSpace.Combat.CombatMastery.Events;
 using Content.Shared.Physics;
 using Content.Shared.Popups;
 using Content.Shared.StatusEffect;
@@ -387,10 +388,6 @@ public abstract class SharedMeleeWeaponSystem : EntitySystem
                 }
 
                 if (!Blocker.CanAttack(user, target, (weaponUid, weapon)))
-                    return false;
-
-                // Can't self-attack if you're the weapon
-                if (weaponUid == target)
                     return false;
 
                 break;
@@ -921,6 +918,11 @@ public abstract class SharedMeleeWeaponSystem : EntitySystem
         RaiseLocalEvent(target.Value, ref attemptEvent);
 
         if (attemptEvent.Cancelled)
+            return false;
+
+        var comboAttempt = new CombatDisarmAttemptedEvent(user, target.Value);
+        RaiseLocalEvent(user, ref comboAttempt);
+        if (comboAttempt.Cancelled)
             return false;
 
         var chance = CalculateDisarmChance(user, target.Value, inTargetHand, combatMode);

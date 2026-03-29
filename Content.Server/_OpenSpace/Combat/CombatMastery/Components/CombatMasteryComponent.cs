@@ -12,17 +12,19 @@ public sealed partial class CombatMasteryComponent : Component
 {
     [DataField] public int MaxComboLength = 12;
 
+    [DataField] public TimeSpan ComboTimeout = TimeSpan.FromSeconds(5);
+
     [DataField] public List<ComboMasteryKeys> CombatMasteryCurrentCombo = new();
 
     [DataField] public EntityUid? CurrentTarget;
-
-    [DataField] public CombatMasteryTemplateCollection TemplateCollection = new();
 
     [ViewVariables] public DamageSpecifier? OriginalUnarmedMeleeDamage;
 
     [ViewVariables] public bool PendingMeleeDamageRefresh;
 
     [ViewVariables] public bool PendingHudStateRefresh;
+
+    [ViewVariables] public TimeSpan? LastComboUpdateTime;
 }
 
 [DataDefinition]
@@ -98,14 +100,7 @@ public sealed partial class CombatMasteryTemplateCollection
             if (!template.IsValid())
                 continue;
 
-            var tailKey = template.Sequence[^1];
-            if (!_templatesByTailKey.TryGetValue(tailKey, out var bucket))
-            {
-                bucket = [];
-                _templatesByTailKey[tailKey] = bucket;
-            }
-
-            bucket.Add(template);
+            GetOrCreateTailBucket(template.Sequence[^1]).Add(template);
         }
 
         foreach (var bucket in _templatesByTailKey.Values)
@@ -114,6 +109,16 @@ public sealed partial class CombatMasteryTemplateCollection
         }
 
         _lookupDirty = false;
+    }
+
+    private List<CombatMasteryTemplate> GetOrCreateTailBucket(ComboMasteryKeys tailKey)
+    {
+        if (_templatesByTailKey.TryGetValue(tailKey, out var bucket))
+            return bucket;
+
+        bucket = [];
+        _templatesByTailKey[tailKey] = bucket;
+        return bucket;
     }
 
     private static bool TailMatches(IReadOnlyList<ComboMasteryKeys> combo, IReadOnlyList<ComboMasteryKeys> template)

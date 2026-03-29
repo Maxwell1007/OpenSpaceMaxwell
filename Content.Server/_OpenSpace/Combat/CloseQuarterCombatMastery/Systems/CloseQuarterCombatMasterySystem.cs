@@ -8,17 +8,13 @@ using Content.Shared.Damage;
 using Content.Shared.Damage.Components;
 using Content.Shared.Damage.Events;
 using Content.Shared.Damage.Systems;
-using Content.Shared.FixedPoint;
 using Content.Shared.Hands.Components;
 using Content.Shared.Hands.EntitySystems;
-using Content.Shared.IdentityManagement;
 using Content.Shared.Interaction.Events;
 using Content.Shared.Inventory.VirtualItem;
 using Content.Shared.Jittering;
 using Content.Shared.Movement.Pulling.Components;
 using Content.Shared.Movement.Pulling.Systems;
-using Content.Shared.Popups;
-using Content.Shared.Standing;
 using Content.Shared.StatusEffectNew;
 using Content.Shared.Stunnable;
 using Content.Shared.Throwing;
@@ -28,22 +24,17 @@ using Content.Shared._OpenSpace.Combat.CombatMastery;
 using Content.Shared._Starlight.Medical.Damage;
 using Robust.Server.GameObjects;
 using Robust.Shared.Maths;
-using Robust.Shared.Prototypes;
 using Robust.Shared.Random;
 using Robust.Shared.Timing;
 
 namespace Content.Server._OpenSpace.Combat.CloseQuarterCombatMastery.Systems;
 
-public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateCollectionSystem<CloseQuarterCombatMasteryComponent>
+public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSystem<CloseQuarterCombatMasteryComponent>
 {
-    [Dependency] private readonly DamageableSystem _damageable = default!;
     [Dependency] private readonly SharedHandsSystem _hands = default!;
     [Dependency] private readonly SharedJitteringSystem _jittering = default!;
     [Dependency] private readonly PullingSystem _pulling = default!;
-    [Dependency] private readonly SharedPopupSystem _popup = default!;
-    [Dependency] private readonly IPrototypeManager _prototypeManager = default!;
     [Dependency] private readonly IRobustRandom _random = default!;
-    [Dependency] private readonly StandingStateSystem _standing = default!;
     [Dependency] private readonly StatusEffectsSystem _statusEffects = default!;
     [Dependency] private readonly SharedStaminaSystem _stamina = default!;
     [Dependency] private readonly SharedStunSystem _stun = default!;
@@ -82,38 +73,21 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
 
     protected override bool OnTemplateMatched(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
     {
-        var executed = false;
-
         switch (template.Name)
         {
             case CloseQuarterCombatMasteryComponent.SlamTemplateName:
-                executed = DoSlam(ent.Owner, target, ent.Comp);
-                if (executed)
-                    PopupTechnique(ent.Owner, target, "cqc-slam-attacker-popup", "cqc-slam-target-popup", true);
-                break;
+                return TryExecuteSlam(ent, target);
             case CloseQuarterCombatMasteryComponent.CQCKickTemplateName:
-                executed = DoCQCKick(ent.Owner, target, ent.Comp);
-                if (executed)
-                    PopupTechnique(ent.Owner, target, "cqc-kick-attacker-popup", "cqc-kick-target-popup");
-                break;
+                return TryExecuteKick(ent, target);
             case CloseQuarterCombatMasteryComponent.RestrainTemplateName:
-                executed = DoRestrain(ent.Owner, target, ent.Comp);
-                if (executed)
-                    PopupTechnique(ent.Owner, target, "cqc-restrain-attacker-popup", "cqc-restrain-target-popup", true);
-                break;
+                return TryExecuteRestrain(ent, target);
             case CloseQuarterCombatMasteryComponent.PressureTemplateName:
-                executed = DoPressure(ent.Owner, target, ent.Comp);
-                if (executed)
-                    PopupTechnique(ent.Owner, target, "cqc-pressure-attacker-popup", "cqc-pressure-target-popup");
-                break;
+                return TryExecutePressure(ent, target);
             case CloseQuarterCombatMasteryComponent.ConsecutiveCQCTemplateName:
-                executed = DoConsecutiveCqc(ent.Owner, target, ent.Comp);
-                if (executed)
-                    PopupTechnique(ent.Owner, target, "cqc-consecutive-attacker-popup", "cqc-consecutive-target-popup", true);
-                break;
+                return TryExecuteConsecutiveCqc(ent, target);
         }
 
-        return executed;
+        return false;
     }
 
     private void OnAttackAttempt(Entity<CloseQuarterCombatMasteryComponent> ent, ref AttackAttemptEvent args)
@@ -171,6 +145,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
                     autoStand: true,
                     drop: true,
                     voluntary: true);
+                StandImmediately(args.User);
             }
 
             if (bonusDamage > 0f)
@@ -185,6 +160,9 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
 
         foreach (var target in args.HitEntities)
         {
+            if (target == args.User)
+                continue;
+
             if (!TryComp<CloseQuarterCombatMasteryComponent>(target, out var defenderCqc))
                 continue;
 
@@ -259,7 +237,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         if (TerminatingOrDeleted(target) || IsTargetStunned(target))
             return false;
 
-        ApplyBluntDamage(user, target, component, component.SlamBluntDamage);
+        ApplyBluntDamage(user, target, component.BluntDamageType, component.SlamBluntDamage);
         _stun.TryKnockdown(target, component.SlamKnockdownDuration, refresh: true, autoStand: true, drop: true, force: true);
         return true;
     }
@@ -271,12 +249,12 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
 
         if (IsTargetStunned(target))
         {
-            ApplyBluntDamage(user, target, component, component.CQCKickStunnedBluntDamage);
+            ApplyBluntDamage(user, target, component.BluntDamageType, component.CQCKickStunnedBluntDamage);
             _statusEffects.TryAddStatusEffectDuration(target, SleepingSystem.StatusEffectForcedSleeping, component.CQCKickSleepDuration);
             return true;
         }
 
-        ApplyBluntDamage(user, target, component, component.CQCKickBluntDamage);
+        ApplyBluntDamage(user, target, component.BluntDamageType, component.CQCKickBluntDamage);
         ThrowAwayFromUser(user, target, component.CQCKickThrowDistance, component.CQCKickThrowSpeed);
         return true;
     }
@@ -310,7 +288,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         if (TerminatingOrDeleted(target) || IsTargetStunned(target))
             return false;
 
-        ApplyBluntDamage(user, target, component, component.ConsecutiveCqcBluntDamage);
+        ApplyBluntDamage(user, target, component.BluntDamageType, component.ConsecutiveCqcBluntDamage);
         _stamina.TakeStaminaDamage(target, component.ConsecutiveCqcStaminaDamage, source: user);
         TryPickupTargetActiveItem(user, target);
         return true;
@@ -339,7 +317,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
 
         if (_random.Prob(ent.Comp.RestrainFollowupBonusDamageChance))
         {
-            ApplyBluntDamage(ent.Owner, target, ent.Comp, ent.Comp.RestrainFollowupBluntDamage);
+            ApplyBluntDamage(ent.Owner, target, ent.Comp.BluntDamageType, ent.Comp.RestrainFollowupBluntDamage);
             _jittering.DoJitter(target, ent.Comp.RestrainFollowupJitterDuration, refresh: true);
         }
 
@@ -351,24 +329,11 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         ResetRestrainFollowup(ent.Comp);
     }
 
-    private void PopupTechnique(EntityUid user, EntityUid target, string attackerLocKey, string targetLocKey, bool includeTargetName = false)
-    {
-        var attackerMessage = includeTargetName
-            ? Loc.GetString(attackerLocKey, ("target", Identity.Entity(target, EntityManager)))
-            : Loc.GetString(attackerLocKey);
-        var targetMessage = Loc.GetString(targetLocKey);
-
-        _popup.PopupEntity(attackerMessage, user, user);
-        _popup.PopupEntity(targetMessage, target, target);
-    }
-
     private void PopupDefensiveNullify(EntityUid defender, EntityUid attacker)
     {
-        var defenderMessage = Loc.GetString("cqc-defensive-nullify-defender-popup");
-        var attackerMessage = Loc.GetString("cqc-defensive-nullify-attacker-popup");
-
-        _popup.PopupEntity(defenderMessage, defender, defender);
-        _popup.PopupEntity(attackerMessage, attacker, attacker);
+        PopupTechnique(defender, attacker,
+            "cqc-defensive-nullify-defender-popup",
+            "cqc-defensive-nullify-attacker-popup");
     }
 
     private void TryPickupTargetActiveItem(EntityUid user, EntityUid target)
@@ -391,15 +356,6 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
                !HasComp<VirtualItemComponent>(held.Value);
     }
 
-    private void ApplyBluntDamage(EntityUid user, EntityUid target, CloseQuarterCombatMasteryComponent component, float amount)
-    {
-        if (!TryComp<DamageableComponent>(target, out _))
-            return;
-
-        var bluntDamage = new DamageSpecifier(_prototypeManager.Index(component.BluntDamageType), FixedPoint2.New(amount));
-        _damageable.TryChangeDamage(target, bluntDamage, ignoreResistances: true, origin: user);
-    }
-
     private void ThrowAwayFromUser(EntityUid user, EntityUid target, float distance, float speed)
     {
         var userPos = _transform.GetWorldPosition(Transform(user));
@@ -416,13 +372,6 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         _throwing.TryThrow(target, throwVector, speed, user, compensateFriction: true, doSpin: false);
     }
 
-    private bool IsEntityDown(EntityUid uid)
-    {
-        return _standing.IsDown(uid)
-               || HasComp<KnockedDownComponent>(uid)
-               || HasComp<SleepingComponent>(uid);
-    }
-
     private bool IsTargetStunned(EntityUid target)
     {
         return HasComp<StunnedComponent>(target)
@@ -437,8 +386,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
 
     private void AddUnarmedBonusDamage(ref AttackedEvent args, CloseQuarterCombatMasteryComponent component, float bonusDamage)
     {
-        var bonus = new DamageSpecifier(_prototypeManager.Index(component.BluntDamageType), FixedPoint2.New(bonusDamage));
-        args.BonusDamage += bonus;
+        args.BonusDamage += CreateBluntDamage(component.BluntDamageType, bonusDamage);
     }
 
     private static void ResetRestrainFollowup(CloseQuarterCombatMasteryComponent component)
@@ -496,10 +444,48 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTemplateColle
         component.PendingDefensiveMeleeOrigin = null;
         component.PendingDefensiveMeleeExpireAt = default;
     }
-
-    private void RequestMeleeDamageRefresh(EntityUid uid)
+    private bool TryExecuteSlam(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
     {
-        var ev = new CombatMasteryRefreshMeleeDamageEvent();
-        RaiseLocalEvent(uid, ref ev);
+        if (!DoSlam(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target, "cqc-slam-attacker-popup", "cqc-slam-target-popup", includeTargetName: true);
+        return true;
+    }
+
+    private bool TryExecuteKick(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoCQCKick(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target, "cqc-kick-attacker-popup", "cqc-kick-target-popup");
+        return true;
+    }
+
+    private bool TryExecuteRestrain(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoRestrain(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target, "cqc-restrain-attacker-popup", "cqc-restrain-target-popup", includeTargetName: true);
+        return true;
+    }
+
+    private bool TryExecutePressure(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoPressure(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target, "cqc-pressure-attacker-popup", "cqc-pressure-target-popup");
+        return true;
+    }
+
+    private bool TryExecuteConsecutiveCqc(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    {
+        if (!DoConsecutiveCqc(ent.Owner, target, ent.Comp))
+            return false;
+
+        PopupTechnique(ent.Owner, target, "cqc-consecutive-attacker-popup", "cqc-consecutive-target-popup", includeTargetName: true);
+        return true;
     }
 }
