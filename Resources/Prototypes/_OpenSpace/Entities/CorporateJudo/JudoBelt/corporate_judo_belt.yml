@@ -5,8 +5,8 @@
   description: Do not forget to yell "Stop resisting!" while you break graytider's arm in half
   components:
   - type: Sprite
-    sprite: Clothing/Belt/champion.rsi
+    sprite: _OpenSpace/Clothing/Belt/corporate_judo.rsi
   - type: Clothing
-    sprite: Clothing/Belt/champion.rsi
+    sprite: _OpenSpace/Clothing/Belt/corporate_judo.rsi
     quickEquip: true
   - type: CorporateJudoBelt

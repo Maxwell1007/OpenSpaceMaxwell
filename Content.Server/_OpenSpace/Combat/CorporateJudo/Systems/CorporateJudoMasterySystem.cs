@@ -47,8 +47,11 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTechniqueSystem<Co
         RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    private static void OnCollectMeleeDamage(Entity<CorporateJudoMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
+    private void OnCollectMeleeDamage(Entity<CorporateJudoMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
     {
+        if (!IsMasteryActive(ent))
+            return;
+
         args.ConsiderDamage(ent.Comp.UnarmedDamage);
     }
 
@@ -99,7 +102,7 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTechniqueSystem<Co
 
     private bool DoJudoThrow(EntityUid user, EntityUid target, CorporateJudoMasteryComponent component)
     {
-        if (TerminatingOrDeleted(target))
+        if (TerminatingOrDeleted(target) || IsEntityDown(user) || IsEntityDown(target))
             return false;
 
         _stamina.TakeStaminaDamage(target, component.JudoThrowStaminaDamage, source: user);

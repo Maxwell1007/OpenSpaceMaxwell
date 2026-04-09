@@ -12,5 +12,8 @@ public sealed partial class CombatMasteryTemplate
     [DataField(required: true)]
     public List<ComboMasteryKeys> Sequence = [];
 
+    [DataField]
+    public bool RequireSameTarget = true;
+
     public bool IsValid() => !string.IsNullOrWhiteSpace(Name) && Sequence.Count > 0;
 }

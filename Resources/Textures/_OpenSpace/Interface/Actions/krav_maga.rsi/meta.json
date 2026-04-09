@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "license": "CC-BY-SA-3.0",
+  "copyright": "Taken from Paradise Station 13 (BYOND) at commit 4993594448ebe385554407f1a559008518e5b00a: icons/mob/actions/actions.dmi (states: legsweep, lungpunch, neckchop, neutralstance)",
+  "size": {
+    "x": 32,
+    "y": 32
+  },
+  "states": [
+    {
+      "name": "legsweep"
+    },
+    {
+      "name": "lungpunch"
+    },
+    {
+      "name": "neckchop"
+    },
+    {
+      "name": "neutralstance"
+    }
+  ]
+}

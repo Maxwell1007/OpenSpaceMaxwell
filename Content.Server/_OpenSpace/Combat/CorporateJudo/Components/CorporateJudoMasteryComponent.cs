@@ -80,39 +80,60 @@ public sealed partial class CorporateJudoMasteryComponent : Component, ICombatMa
     public float FlashSlowTo = 0.8f;
 
     [DataField]
-    private CombatMasteryTemplateCollection _templateCollection = new();
+    public int Priority = 5;
+
+    [DataField]
+    private CombatMasteryTemplateCollection _templateCollection = new()
+    {
+        Templates =
+        [
+            new CombatMasteryTemplate
+            {
+                Name = DiscombobulateTemplateName,
+                Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.grab],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = EyePokeTemplateName,
+                Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.attack],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = JudoThrowTemplateName,
+                Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.disarm],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = ArmbarTemplateName,
+                Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.grab],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = WheelThrowTemplateName,
+                Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.disarm, ComboMasteryKeys.attack],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = GoldenBlastTemplateName,
+                Sequence =
+                [
+                    ComboMasteryKeys.help,
+                    ComboMasteryKeys.disarm,
+                    ComboMasteryKeys.help,
+                    ComboMasteryKeys.grab,
+                    ComboMasteryKeys.disarm,
+                    ComboMasteryKeys.disarm,
+                    ComboMasteryKeys.grab,
+                    ComboMasteryKeys.help,
+                    ComboMasteryKeys.disarm,
+                    ComboMasteryKeys.disarm,
+                    ComboMasteryKeys.grab,
+                    ComboMasteryKeys.help,
+                ],
+            },
+        ],
+    };
 
     public CombatMasteryTemplateCollection TemplateCollection => _templateCollection;
-
-    public CorporateJudoMasteryComponent()
-    {
-        AddTemplate(DiscombobulateTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.grab);
-        AddTemplate(EyePokeTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.attack);
-        AddTemplate(JudoThrowTemplateName, ComboMasteryKeys.grab, ComboMasteryKeys.disarm);
-        AddTemplate(ArmbarTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.grab);
-        AddTemplate(WheelThrowTemplateName, ComboMasteryKeys.grab, ComboMasteryKeys.disarm, ComboMasteryKeys.attack);
-        AddTemplate(
-            GoldenBlastTemplateName,
-            ComboMasteryKeys.help,
-            ComboMasteryKeys.disarm,
-            ComboMasteryKeys.help,
-            ComboMasteryKeys.grab,
-            ComboMasteryKeys.disarm,
-            ComboMasteryKeys.disarm,
-            ComboMasteryKeys.grab,
-            ComboMasteryKeys.help,
-            ComboMasteryKeys.disarm,
-            ComboMasteryKeys.disarm,
-            ComboMasteryKeys.grab,
-            ComboMasteryKeys.help);
-    }
-
-    private void AddTemplate(string name, params ComboMasteryKeys[] sequence)
-    {
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = name,
-            Sequence = [.. sequence],
-        });
-    }
+    public int StylePriority => Priority;
 }

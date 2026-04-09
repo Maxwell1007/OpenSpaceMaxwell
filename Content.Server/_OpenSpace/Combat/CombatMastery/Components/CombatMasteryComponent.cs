@@ -30,109 +30,16 @@ public sealed partial class CombatMasteryComponent : Component
 [DataDefinition]
 public sealed partial class CombatMasteryTemplateCollection
 {
-    [DataField] private List<CombatMasteryTemplate> _templates = [];
+    [DataField] public List<CombatMasteryTemplate> Templates = [];
 
-    [NonSerialized] private readonly Dictionary<ComboMasteryKeys, List<CombatMasteryTemplate>> _templatesByTailKey = [];
+    [NonSerialized] public List<CombatMasteryTemplateProgressState> ActiveTemplates = [];
 
-    [NonSerialized] private bool _lookupDirty = true;
+    [NonSerialized] public bool ActiveTemplatesDirty = true;
+}
 
-    public bool TryFindTailMatch(IReadOnlyList<ComboMasteryKeys> combo, out CombatMasteryTemplate? matchedTemplate)
-    {
-        matchedTemplate = null;
-
-        if (combo.Count == 0)
-            return false;
-
-        RebuildLookupIfNeeded();
-
-        var tailKey = combo[^1];
-        if (!_templatesByTailKey.TryGetValue(tailKey, out var candidates))
-            return false;
-
-        foreach (var candidate in candidates)
-        {
-            if (!TailMatches(combo, candidate.Sequence))
-                continue;
-
-            matchedTemplate = candidate;
-            return true;
-        }
-
-        return false;
-    }
-
-    public bool TryAddOrReplaceTemplate(CombatMasteryTemplate template)
-    {
-        if (!template.IsValid())
-            return false;
-
-        var existingIndex = _templates.FindIndex(x => x.Name == template.Name);
-        if (existingIndex >= 0)
-            _templates[existingIndex] = template;
-        else
-            _templates.Add(template);
-
-        _lookupDirty = true;
-        return true;
-    }
-
-    public bool TryRemoveTemplate(string templateName)
-    {
-        if (string.IsNullOrWhiteSpace(templateName))
-            return false;
-
-        var removed = _templates.RemoveAll(x => x.Name == templateName) > 0;
-        if (removed)
-            _lookupDirty = true;
-
-        return removed;
-    }
-
-    private void RebuildLookupIfNeeded()
-    {
-        if (!_lookupDirty)
-            return;
-
-        _templatesByTailKey.Clear();
-
-        foreach (var template in _templates)
-        {
-            if (!template.IsValid())
-                continue;
-
-            GetOrCreateTailBucket(template.Sequence[^1]).Add(template);
-        }
-
-        foreach (var bucket in _templatesByTailKey.Values)
-        {
-            bucket.Sort(static (left, right) => right.Sequence.Count.CompareTo(left.Sequence.Count));
-        }
-
-        _lookupDirty = false;
-    }
-
-    private List<CombatMasteryTemplate> GetOrCreateTailBucket(ComboMasteryKeys tailKey)
-    {
-        if (_templatesByTailKey.TryGetValue(tailKey, out var bucket))
-            return bucket;
-
-        bucket = [];
-        _templatesByTailKey[tailKey] = bucket;
-        return bucket;
-    }
-
-    private static bool TailMatches(IReadOnlyList<ComboMasteryKeys> combo, IReadOnlyList<ComboMasteryKeys> template)
-    {
-        if (template.Count > combo.Count)
-            return false;
-
-        var offset = combo.Count - template.Count;
-        for (var index = 0; index < template.Count; index++)
-        {
-            if (combo[offset + index] != template[index])
-                return false;
-        }
-
-        return true;
-    }
+public sealed class CombatMasteryTemplateProgressState
+{
+    public CombatMasteryTemplate Template = default!;
+    public int NextStepIndex;
+    public EntityUid? CurrentTarget;
 }

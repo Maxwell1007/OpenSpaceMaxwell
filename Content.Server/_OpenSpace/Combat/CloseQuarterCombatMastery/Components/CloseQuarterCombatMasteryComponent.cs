@@ -61,6 +61,9 @@ public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICom
     public float UnarmedDamage = 13f;
 
     [DataField]
+    public int Priority = 6;
+
+    [DataField]
     public float UnarmedDownedTargetBonusDamage = 5f;
 
     [DataField]
@@ -94,9 +97,40 @@ public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICom
     public TimeSpan RestrainFollowupJitterDuration = TimeSpan.FromSeconds(5);
 
     [DataField]
-    private CombatMasteryTemplateCollection _templateCollection = new();
+    private CombatMasteryTemplateCollection _templateCollection = new()
+    {
+        Templates =
+        [
+            new CombatMasteryTemplate
+            {
+                Name = SlamTemplateName,
+                Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.attack],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = CQCKickTemplateName,
+                Sequence = [ComboMasteryKeys.attack, ComboMasteryKeys.attack],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = RestrainTemplateName,
+                Sequence = [ComboMasteryKeys.grab, ComboMasteryKeys.grab],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = PressureTemplateName,
+                Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.grab],
+            },
+            new CombatMasteryTemplate
+            {
+                Name = ConsecutiveCQCTemplateName,
+                Sequence = [ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.attack],
+            },
+        ],
+    };
 
     public CombatMasteryTemplateCollection TemplateCollection => _templateCollection;
+    public int StylePriority => Priority;
 
     [ViewVariables]
     public bool RestrainFollowupReady;
@@ -121,22 +155,4 @@ public sealed partial class CloseQuarterCombatMasteryComponent : Component, ICom
 
     [ViewVariables]
     public bool PendingDefensiveMeleeNullifyStamina;
-
-    public CloseQuarterCombatMasteryComponent()
-    {
-        AddTemplate(SlamTemplateName, ComboMasteryKeys.grab, ComboMasteryKeys.attack);
-        AddTemplate(CQCKickTemplateName, ComboMasteryKeys.attack, ComboMasteryKeys.attack);
-        AddTemplate(RestrainTemplateName, ComboMasteryKeys.grab, ComboMasteryKeys.grab);
-        AddTemplate(PressureTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.grab);
-        AddTemplate(ConsecutiveCQCTemplateName, ComboMasteryKeys.disarm, ComboMasteryKeys.disarm, ComboMasteryKeys.attack);
-    }
-
-    private void AddTemplate(string name, params ComboMasteryKeys[] sequence)
-    {
-        _templateCollection.TryAddOrReplaceTemplate(new CombatMasteryTemplate
-        {
-            Name = name,
-            Sequence = [.. sequence],
-        });
-    }
 }

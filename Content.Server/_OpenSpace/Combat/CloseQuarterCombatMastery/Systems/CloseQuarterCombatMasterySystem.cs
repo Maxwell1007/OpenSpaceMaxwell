@@ -66,8 +66,11 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    private static void OnCollectMeleeDamage(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
+    private void OnCollectMeleeDamage(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
     {
+        if (!IsMasteryActive(ent))
+            return;
+
         args.ConsiderDamage(ent.Comp.UnarmedDamage);
     }
 
@@ -92,6 +95,9 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
 
     private void OnAttackAttempt(Entity<CloseQuarterCombatMasteryComponent> ent, ref AttackAttemptEvent args)
     {
+        if (!IsMasteryActive(ent))
+            return;
+
         if (args.Cancelled || args.Uid != ent.Owner || !args.Disarm || args.Target is not { } target)
             return;
 
@@ -128,6 +134,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
     private void OnMeleeAttacked(Entity<DamageableComponent> ent, ref AttackedEvent args)
     {
         if (TryComp<CloseQuarterCombatMasteryComponent>(args.User, out var attackerCqc) &&
+            IsMasteryActive((args.User, attackerCqc)) &&
             IsUnarmedMeleeAttack(args))
         {
             var targetDown = IsEntityDown(ent.Owner);
@@ -166,6 +173,9 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
             if (!TryComp<CloseQuarterCombatMasteryComponent>(target, out var defenderCqc))
                 continue;
 
+            if (!IsMasteryActive((target, defenderCqc)))
+                continue;
+
             if (!_random.Prob(defenderCqc.DefensiveMeleeNullifyChance))
                 continue;
 
@@ -181,6 +191,9 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
 
     private void OnDisarmed(Entity<CloseQuarterCombatMasteryComponent> ent, ref DisarmedEvent args)
     {
+        if (!IsMasteryActive(ent))
+            return;
+
         if (args.Handled || !_random.Prob(ent.Comp.DefensiveMeleeNullifyChance))
             return;
 
@@ -195,6 +208,9 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
 
     private void OnBeforeStaminaDamage(Entity<CloseQuarterCombatMasteryComponent> ent, ref BeforeStaminaDamageEvent args)
     {
+        if (!IsMasteryActive(ent))
+            return;
+
         if (!ent.Comp.PendingDefensiveMeleeNullifyStamina)
             return;
 
@@ -214,6 +230,12 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         if (!TryComp<CloseQuarterCombatMasteryComponent>(ent.Owner, out var cqc) ||
             !cqc.PendingDefensiveMeleeNullify)
         {
+            return;
+        }
+
+        if (!IsMasteryActive((ent.Owner, cqc)))
+        {
+            ResetPendingDefensiveNullify(cqc);
             return;
         }
 

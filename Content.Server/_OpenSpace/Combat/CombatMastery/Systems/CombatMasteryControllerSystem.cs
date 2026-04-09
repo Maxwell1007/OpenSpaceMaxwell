@@ -44,6 +44,7 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         ent.Comp.PendingMeleeDamageRefresh = false;
         ent.Comp.PendingHudStateRefresh = false;
         EnsureComp<CombatMasteryComboHudComponent>(ent.Owner);
+        ResetTemplateProgress(ent.Owner);
         RefreshMeleeDamage(ent);
         SyncHudState(ent);
     }
@@ -86,7 +87,7 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         if (_hands.TryGetActiveItem(ent.Owner, out _))
             return;
 
-        UpdateComboAndTryExecute(ent, target, ComboMasteryKeys.help);
+        ApplyComboStep(ent, target, ComboMasteryKeys.help);
     }
 
     private void OnMeleeHit(Entity<CombatMasteryComponent> ent, ref MeleeHitEvent args)
@@ -111,13 +112,11 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
             return;
         }
 
-        if (TryExecuteTechnique(ent, target, ComboMasteryKeys.attack))
+        if (ApplyComboStep(ent, target, ComboMasteryKeys.attack))
         {
             args.Handled = true;
             return;
         }
-
-        RecordCombo(ent, target, ComboMasteryKeys.attack);
     }
 
     private void OnCombatDisarmAttempted(Entity<CombatMasteryComponent> ent, ref CombatDisarmAttemptedEvent args)
@@ -131,13 +130,11 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
             return;
         }
 
-        if (TryExecuteTechnique(ent, args.Target, ComboMasteryKeys.disarm))
+        if (ApplyComboStep(ent, args.Target, ComboMasteryKeys.disarm))
         {
             args.Cancelled = true;
             return;
         }
-
-        RecordCombo(ent, args.Target, ComboMasteryKeys.disarm);
     }
 
     private bool HandleGrab(Entity<CombatMasteryComponent> ent, EntityUid target)
@@ -145,29 +142,27 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         if (!_combatMode.IsInCombatMode(ent.Owner) || !HasComp<MobStateComponent>(target))
             return false;
 
-        return UpdateComboAndTryExecute(ent, target, ComboMasteryKeys.grab);
+        return ApplyComboStep(ent, target, ComboMasteryKeys.grab);
     }
 
-    private bool UpdateComboAndTryExecute(Entity<CombatMasteryComponent> ent, EntityUid target, ComboMasteryKeys key)
+    private bool ApplyComboStep(Entity<CombatMasteryComponent> ent, EntityUid target, ComboMasteryKeys key)
     {
         if (!TryPrepareComboUpdate(ent, target))
             return false;
 
         ent.Comp.CombatMasteryCurrentCombo.Add(key);
-        var executed = TryExecuteMatchedTemplate(ent);
+        var ev = new CombatMasteryComboUpdatedEvent(target, key, ent.Comp.CombatMasteryCurrentCombo);
+        RaiseLocalEvent(ent.Owner, ref ev);
+
+        if (ev.TemplateExecuted)
+        {
+            ClearCombo(ent);
+            return true;
+        }
+
         RefreshComboTimestamp(ent.Comp);
         SyncHudState(ent);
-        return executed;
-    }
-
-    private void RecordCombo(Entity<CombatMasteryComponent> ent, EntityUid target, ComboMasteryKeys key)
-    {
-        if (!TryPrepareComboUpdate(ent, target))
-            return;
-
-        ent.Comp.CombatMasteryCurrentCombo.Add(key);
-        RefreshComboTimestamp(ent.Comp);
-        SyncHudState(ent);
+        return false;
     }
 
     private bool TryPrepareComboUpdate(Entity<CombatMasteryComponent> ent, EntityUid target)
@@ -178,61 +173,21 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
             return false;
         }
 
-        ResetComboForNewTarget(ent.Comp, target);
+        ResetComboForNewTarget(ent, target);
         TrimCombo(ent.Comp);
         return true;
     }
 
-    private bool TryExecuteTechnique(Entity<CombatMasteryComponent> ent, EntityUid target, ComboMasteryKeys key)
+    private bool ResetComboForNewTarget(Entity<CombatMasteryComponent> ent, EntityUid target)
     {
-        if (target == ent.Owner)
-        {
-            ClearCombo(ent);
-            return false;
-        }
-
-        var previewCombo = BuildPreviewCombo(ent.Comp, target, key);
-        var ev = new CombatMasteryComboUpdatedEvent(target, previewCombo);
-        RaiseLocalEvent(ent.Owner, ref ev);
-
-        if (!ev.TemplateExecuted)
+        if (ent.Comp.CurrentTarget == target)
             return false;
 
-        ent.Comp.CurrentTarget = target;
         ent.Comp.CombatMasteryCurrentCombo.Clear();
-        RefreshComboTimestamp(ent.Comp);
-        SyncHudState(ent);
+        ent.Comp.CurrentTarget = target;
+        ent.Comp.LastComboUpdateTime = null;
+        ResetTemplateProgress(ent.Owner);
         return true;
-    }
-
-    private static List<ComboMasteryKeys> BuildPreviewCombo(
-        CombatMasteryComponent component,
-        EntityUid target,
-        ComboMasteryKeys key)
-    {
-        var combo = component.CurrentTarget == target
-            ? new List<ComboMasteryKeys>(component.CombatMasteryCurrentCombo)
-            : new List<ComboMasteryKeys>();
-
-        if (combo.Count >= Math.Max(1, component.MaxComboLength))
-            combo.RemoveAt(0);
-
-        combo.Add(key);
-        return combo;
-    }
-
-    private bool TryExecuteMatchedTemplate(Entity<CombatMasteryComponent> ent)
-    {
-        if (ent.Comp.CurrentTarget is not { } target || ent.Comp.CombatMasteryCurrentCombo.Count == 0)
-            return false;
-
-        var ev = new CombatMasteryComboUpdatedEvent(target, ent.Comp.CombatMasteryCurrentCombo);
-        RaiseLocalEvent(ent.Owner, ref ev);
-
-        if (ev.TemplateExecuted)
-            ent.Comp.CombatMasteryCurrentCombo.Clear();
-
-        return ev.TemplateExecuted;
     }
 
     private void ClearCombo(Entity<CombatMasteryComponent> ent)
@@ -240,7 +195,14 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         ent.Comp.CombatMasteryCurrentCombo.Clear();
         ent.Comp.CurrentTarget = null;
         ent.Comp.LastComboUpdateTime = null;
+        ResetTemplateProgress(ent.Owner);
         SyncHudState(ent);
+    }
+
+    private void ResetTemplateProgress(EntityUid uid)
+    {
+        var ev = new CombatMasteryComboResetEvent();
+        RaiseLocalEvent(uid, ref ev);
     }
 
     private void OnHudRefreshRequested(Entity<CombatMasteryComponent> ent, ref CombatMasteryHudRefreshEvent args)
@@ -357,15 +319,6 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
             CopyVisibleCombo(ent.Comp, hud);
 
         Dirty(ent.Owner, hud);
-    }
-
-    private static void ResetComboForNewTarget(CombatMasteryComponent component, EntityUid target)
-    {
-        if (component.CurrentTarget == target)
-            return;
-
-        component.CombatMasteryCurrentCombo.Clear();
-        component.CurrentTarget = target;
     }
 
     private static void TrimCombo(CombatMasteryComponent component)
