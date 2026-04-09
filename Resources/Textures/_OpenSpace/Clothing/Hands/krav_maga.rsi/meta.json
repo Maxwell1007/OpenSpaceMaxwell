@@ -1,7 +1,7 @@
 {
   "version": 1,
   "license": "CC-BY-SA-3.0",
-  "copyright": "Taken from Paradise Station 13 (BYOND) at commit 4993594448ebe385554407f1a559008518e5b00a: icons/obj/clothing/gloves.dmi (state: fightgloves), icons/mob/clothing/hands.dmi (state: fightgloves), icons/mob/inhands/clothing_lefthand.dmi (state: bgloves), icons/mob/inhands/clothing_righthand.dmi (state: bgloves)",
+  "copyright": "By Wizden",
   "size": {
     "x": 32,
     "y": 32
