@@ -86,6 +86,7 @@ public sealed class PullingSystem : EntitySystem
     [Dependency] private readonly IMapManager _mapManager = default!;
     [Dependency] private readonly ClimbSystem _climbSystem = default!;
     private Type? _cqcComponentType;
+    private Type? _sleepingCarpComponentType;
 
     public override void Update(float frameTime)
     {
@@ -122,6 +123,9 @@ public sealed class PullingSystem : EntitySystem
 
         if (_componentFactory.TryGetRegistration("CloseQuarterCombatMastery", out var cqcRegistration))
             _cqcComponentType = cqcRegistration.Type;
+
+        if (_componentFactory.TryGetRegistration("SleepingCarpMastery", out var sleepingCarpRegistration))
+            _sleepingCarpComponentType = sleepingCarpRegistration.Type;
 
         SubscribeLocalEvent<PullableComponent, MoveInputEvent>(OnPullableMoveInput);
         SubscribeLocalEvent<PullableComponent, CollisionChangeEvent>(OnPullableCollisionChange);
@@ -524,6 +528,11 @@ public sealed class PullingSystem : EntitySystem
     {
         return _cqcComponentType != null && HasComp(uid, _cqcComponentType);
     }
+
+    private bool HasSleepingCarpMastery(EntityUid uid)
+    {
+        return _sleepingCarpComponentType != null && HasComp(uid, _sleepingCarpComponentType);
+    }
     // OpenSpace-Edit End
 
     public override void Shutdown()
@@ -623,6 +632,16 @@ public sealed class PullingSystem : EntitySystem
                 GrabStage.Choke => cqcGrabber ? 0.10f : 0f,
                 _ => 1f
             };
+
+            if (HasSleepingCarpMastery(uid))
+            {
+                chance = pullerComp.GrabStage switch
+                {
+                    GrabStage.Heavy => 0.40f,
+                    GrabStage.Choke => 0.05f,
+                    _ => chance
+                };
+            }
         }
 
         if (_random.Prob(chance))
