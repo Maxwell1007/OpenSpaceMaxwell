@@ -202,7 +202,7 @@ public sealed class SleepingCarpMasterySystem : CombatMasteryTechniqueSystem<Sle
 
     private bool TryExecuteBackKick(Entity<SleepingCarpMasteryComponent> ent, EntityUid target)
     {
-        if (!CanUseStandingTechnique(target) || !IsFacingAway(ent.Owner, target))
+        if (!CanUseStandingTechnique(target))
             return false;
 
         ApplySlipLikeStun(target, ent.Comp.BackKickKnockdownDuration);
@@ -327,13 +327,6 @@ public sealed class SleepingCarpMasterySystem : CombatMasteryTechniqueSystem<Sle
     {
         return !TerminatingOrDeleted(target) &&
                (_mobState.IsDead(target) || _mobState.IsCritical(target) || IsEntityDown(target));
-    }
-
-    private bool IsFacingAway(EntityUid user, EntityUid target)
-    {
-        var userDir = Transform(user).LocalRotation.GetCardinalDir();
-        var targetDir = Transform(target).LocalRotation.GetCardinalDir();
-        return userDir == targetDir;
     }
 
     private static bool IsUnarmedMeleeAttack(AttackedEvent args)
