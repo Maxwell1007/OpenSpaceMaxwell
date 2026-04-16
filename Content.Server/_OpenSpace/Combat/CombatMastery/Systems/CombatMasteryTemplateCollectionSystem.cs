@@ -1,6 +1,5 @@
 using System;
 using Content.Server._OpenSpace.Combat.CombatMastery.Components;
-using Content.Server._OpenSpace.Combat.CombatMastery.Hud;
 using Content.Shared._OpenSpace.Combat.CombatMastery;
 
 namespace Content.Server._OpenSpace.Combat.CombatMastery.Systems;
@@ -8,14 +7,16 @@ namespace Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : EntitySystem
     where TComponent : Component, ICombatMasteryTemplateProvider
 {
+    protected virtual string StyleId => typeof(TComponent).FullName ?? typeof(TComponent).Name;
+
     public override void Initialize()
     {
         base.Initialize();
 
         SubscribeLocalEvent<TComponent, CombatMasteryComboUpdatedEvent>(HandleComboUpdated);
         SubscribeLocalEvent<TComponent, CombatMasteryComboResetEvent>(OnComboReset);
-        SubscribeLocalEvent<TComponent, CombatMasteryActiveStateQueryEvent>(OnActiveStateQuery);
-        SubscribeLocalEvent<TComponent, CombatMasteryHighestPriorityQueryEvent>(OnHighestPriorityQuery);
+        SubscribeLocalEvent<TComponent, CombatMasterySelectActiveStyleEvent>(OnSelectActiveStyle);
+        SubscribeLocalEvent<TComponent, CombatMasteryActiveStyleChangedEvent>(OnActiveStyleChanged);
         SubscribeLocalEvent<TComponent, ComponentStartup>(OnMasteryStartup);
         SubscribeLocalEvent<TComponent, ComponentShutdown>(OnMasteryShutdown);
     }
@@ -61,29 +62,38 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
         ResetProgress(ent.Comp.TemplateCollection);
     }
 
-    private void OnActiveStateQuery(Entity<TComponent> ent, ref CombatMasteryActiveStateQueryEvent args)
+    private void OnSelectActiveStyle(Entity<TComponent> ent, ref CombatMasterySelectActiveStyleEvent args)
     {
-        if (IsMasteryActive(ent))
-            args.HasActiveMastery = true;
+        args.ConsiderStyle(StyleId, ent.Comp.StylePriority);
     }
 
-    private static void OnHighestPriorityQuery(Entity<TComponent> ent, ref CombatMasteryHighestPriorityQueryEvent args)
+    private void OnActiveStyleChanged(Entity<TComponent> ent, ref CombatMasteryActiveStyleChangedEvent args)
     {
-        args.HighestPriority = Math.Max(args.HighestPriority, ent.Comp.StylePriority);
+        var styleId = StyleId;
+
+        if (args.OldStyleId == styleId)
+        {
+            ResetProgress(ent.Comp.TemplateCollection);
+            OnMasteryStopped(ent);
+        }
+
+        if (args.NewStyleId == styleId)
+        {
+            ResetProgress(ent.Comp.TemplateCollection);
+            OnMasteryStarted(ent);
+        }
     }
 
     private void OnMasteryStartup(Entity<TComponent> ent, ref ComponentStartup args)
     {
         ResetProgress(ent.Comp.TemplateCollection);
-        RefreshHudState(ent.Owner);
-        OnMasteryStarted(ent, ref args);
+        RequestActiveStyleRefresh(ent.Owner);
     }
 
     private void OnMasteryShutdown(Entity<TComponent> ent, ref ComponentShutdown args)
     {
         ResetProgress(ent.Comp.TemplateCollection);
-        RefreshHudState(ent.Owner);
-        OnMasteryStopped(ent, ref args);
+        RequestActiveStyleRefresh(ent.Owner, StyleId);
     }
 
     protected virtual void OnComboUpdated(Entity<TComponent> ent, ref CombatMasteryComboUpdatedEvent args)
@@ -92,11 +102,11 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
             return;
     }
 
-    protected virtual void OnMasteryStarted(Entity<TComponent> ent, ref ComponentStartup args)
+    protected virtual void OnMasteryStarted(Entity<TComponent> ent)
     {
     }
 
-    protected virtual void OnMasteryStopped(Entity<TComponent> ent, ref ComponentShutdown args)
+    protected virtual void OnMasteryStopped(Entity<TComponent> ent)
     {
     }
 
@@ -104,14 +114,13 @@ public abstract class CombatMasteryTemplateCollectionSystem<TComponent> : Entity
 
     protected bool IsMasteryActive(Entity<TComponent> ent)
     {
-        var query = new CombatMasteryHighestPriorityQueryEvent();
-        RaiseLocalEvent(ent.Owner, ref query);
-        return ent.Comp.StylePriority >= query.HighestPriority;
+        return TryComp<CombatMasteryComponent>(ent.Owner, out var mastery) &&
+               mastery.ActiveStyleId == StyleId;
     }
 
-    private void RefreshHudState(EntityUid uid)
+    protected void RequestActiveStyleRefresh(EntityUid uid, string? ignoredStyleId = null)
     {
-        var ev = new CombatMasteryHudRefreshEvent();
+        var ev = new CombatMasteryRefreshActiveStyleEvent(ignoredStyleId);
         RaiseLocalEvent(uid, ref ev);
     }
 

@@ -3,7 +3,6 @@ using Content.Server._OpenSpace.Combat.CombatMastery;
 using Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 using Content.Server._OpenSpace.Combat.MimeJutsu.Components;
 using Content.Shared.Damage;
-using Content.Shared.Damage.Components;
 using Content.Shared.Damage.Events;
 using Content.Shared.Damage.Systems;
 using Content.Shared.Hands.EntitySystems;
@@ -13,8 +12,6 @@ using Content.Shared.Mobs.Systems;
 using Content.Shared.StatusEffectNew;
 using Content.Shared.Stunnable;
 using Content.Shared.Throwing;
-using Content.Shared.Weapons.Melee;
-using Content.Shared.Weapons.Melee.Events;
 using Content.Shared._OpenSpace.Combat.CombatMastery;
 using Content.Shared._OpenSpace.Combat.CombatMastery.Events;
 using Content.Shared._Starlight.Combat.Disarming;
@@ -44,18 +41,16 @@ public sealed class MimeJutsuMasterySystem : CombatMasteryTechniqueSystem<MimeJu
 
         SubscribeLocalEvent<MimeJutsuMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
         SubscribeLocalEvent<MimeJutsuMasteryComponent, CombatDisarmAttemptedEvent>(OnCombatDisarmAttempted);
-        SubscribeLocalEvent<DamageableComponent, AttackedEvent>(OnMeleeAttacked);
-        SubscribeLocalEvent<MeleeWeaponComponent, MeleeHitEvent>(OnMeleeHit, before: [typeof(SharedStaminaSystem)]);
         SubscribeLocalEvent<MimeJutsuMasteryComponent, BeforeStaminaDamageEvent>(OnBeforeStaminaDamage);
-        SubscribeLocalEvent<DamageableComponent, DamageBeforeApplyEvent>(OnDamageBeforeApply);
+        SubscribeLocalEvent<MimeJutsuMasteryComponent, DamageBeforeApplyEvent>(OnDamageBeforeApply);
     }
 
-    protected override void OnMasteryStarted(Entity<MimeJutsuMasteryComponent> ent, ref ComponentStartup args)
+    protected override void OnMasteryStarted(Entity<MimeJutsuMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    protected override void OnMasteryStopped(Entity<MimeJutsuMasteryComponent> ent, ref ComponentShutdown args)
+    protected override void OnMasteryStopped(Entity<MimeJutsuMasteryComponent> ent)
     {
         ResetPendingDefensiveNullify(ent.Comp);
         RequestMeleeDamageRefresh(ent.Owner);
@@ -69,18 +64,21 @@ public sealed class MimeJutsuMasterySystem : CombatMasteryTechniqueSystem<MimeJu
         args.ConsiderDamage(ent.Comp.UnarmedDamage);
     }
 
-    private void OnMeleeAttacked(Entity<DamageableComponent> ent, ref AttackedEvent args)
+    protected override void OnComboUpdated(Entity<MimeJutsuMasteryComponent> ent, ref CombatMasteryComboUpdatedEvent args)
     {
-        if (!IsUnarmedMeleeAttack(args) ||
-            !TryComp<MimeJutsuMasteryComponent>(args.User, out var mastery) ||
-            !IsMasteryActive((args.User, mastery)) ||
-            !_random.Prob(mastery.BasicHitKnockdownChance))
+        base.OnComboUpdated(ent, ref args);
+
+        if (args.Step != ComboMasteryKeys.attack ||
+            args.TemplateExecuted ||
+            !IsMasteryActive(ent) ||
+            _mobState.IsDead(args.Target) ||
+            !_random.Prob(ent.Comp.BasicHitKnockdownChance))
         {
             return;
         }
 
-        _stun.TryKnockdown(ent.Owner,
-            mastery.BasicHitKnockdownDuration,
+        _stun.TryKnockdown(args.Target,
+            ent.Comp.BasicHitKnockdownDuration,
             refresh: true,
             autoStand: true,
             drop: true,
@@ -107,26 +105,6 @@ public sealed class MimeJutsuMasterySystem : CombatMasteryTechniqueSystem<MimeJu
         TransferTargetActiveItemToAttacker(ent.Owner, args.Target);
     }
 
-    private void OnMeleeHit(Entity<MeleeWeaponComponent> ent, ref MeleeHitEvent args)
-    {
-        if (!args.IsHit || args.HitEntities.Count == 0)
-            return;
-
-        foreach (var target in args.HitEntities)
-        {
-            if (target == args.User ||
-                !TryComp<MimeJutsuMasteryComponent>(target, out var defenderMime) ||
-                !IsMasteryActive((target, defenderMime)) ||
-                !_random.Prob(defenderMime.DefensiveNullifyChance))
-            {
-                continue;
-            }
-
-            SetPendingDefensiveNullify(defenderMime, args.User, nullifyDamage: true, nullifyStamina: true);
-            ApplyDefensiveCounter(defenderMime, args.User);
-        }
-    }
-
     private void OnBeforeStaminaDamage(Entity<MimeJutsuMasteryComponent> ent, ref BeforeStaminaDamageEvent args)
     {
         if (!IsMasteryActive(ent) || !ent.Comp.PendingDefensiveMeleeNullifyStamina)
@@ -143,33 +121,40 @@ public sealed class MimeJutsuMasterySystem : CombatMasteryTechniqueSystem<MimeJu
         ClearPendingDefensiveNullifyIfUnused(ent.Comp);
     }
 
-    private void OnDamageBeforeApply(Entity<DamageableComponent> ent, ref DamageBeforeApplyEvent args)
+    private void OnDamageBeforeApply(Entity<MimeJutsuMasteryComponent> ent, ref DamageBeforeApplyEvent args)
     {
-        if (!TryComp<MimeJutsuMasteryComponent>(ent.Owner, out var mime) ||
-            !mime.PendingDefensiveMeleeNullify)
+        if (!IsMasteryActive(ent))
         {
+            ResetPendingDefensiveNullify(ent.Comp);
             return;
         }
 
-        if (!IsMasteryActive((ent.Owner, mime)))
+        if (args.Origin is not { } origin)
+            return;
+
+        if (!ent.Comp.PendingDefensiveMeleeNullify &&
+            !ent.Comp.PendingDefensiveMeleeNullifyStamina)
         {
-            ResetPendingDefensiveNullify(mime);
+            if (!_random.Prob(ent.Comp.DefensiveNullifyChance))
+                return;
+
+            SetPendingDefensiveNullify(ent.Comp, origin, nullifyDamage: true, nullifyStamina: true);
+            ApplyDefensiveCounter(ent.Comp, origin);
+        }
+
+        if (IsPendingDefensiveNullifyExpired(ent.Comp))
+        {
+            ResetPendingDefensiveNullify(ent.Comp);
             return;
         }
 
-        if (IsPendingDefensiveNullifyExpired(mime))
-        {
-            ResetPendingDefensiveNullify(mime);
-            return;
-        }
-
-        if (args.Origin != mime.PendingDefensiveMeleeOrigin)
+        if (origin != ent.Comp.PendingDefensiveMeleeOrigin || !ent.Comp.PendingDefensiveMeleeNullify)
             return;
 
         args.Damage = new DamageSpecifier();
 
-        mime.PendingDefensiveMeleeNullify = false;
-        ClearPendingDefensiveNullifyIfUnused(mime);
+        ent.Comp.PendingDefensiveMeleeNullify = false;
+        ClearPendingDefensiveNullifyIfUnused(ent.Comp);
     }
 
     protected override bool OnTemplateMatched(Entity<MimeJutsuMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
@@ -356,8 +341,4 @@ public sealed class MimeJutsuMasterySystem : CombatMasteryTechniqueSystem<MimeJu
             doSpin: false);
     }
 
-    private static bool IsUnarmedMeleeAttack(AttackedEvent args)
-    {
-        return args.Used == args.User;
-    }
 }

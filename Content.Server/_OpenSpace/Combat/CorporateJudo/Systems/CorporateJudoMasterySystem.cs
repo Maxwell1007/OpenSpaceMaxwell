@@ -37,12 +37,12 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTechniqueSystem<Co
         SubscribeLocalEvent<CorporateJudoMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
     }
 
-    protected override void OnMasteryStarted(Entity<CorporateJudoMasteryComponent> ent, ref ComponentStartup args)
+    protected override void OnMasteryStarted(Entity<CorporateJudoMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    protected override void OnMasteryStopped(Entity<CorporateJudoMasteryComponent> ent, ref ComponentShutdown args)
+    protected override void OnMasteryStopped(Entity<CorporateJudoMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }

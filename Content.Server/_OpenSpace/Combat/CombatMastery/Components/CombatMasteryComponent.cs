@@ -25,6 +25,10 @@ public sealed partial class CombatMasteryComponent : Component
     [ViewVariables] public bool PendingHudStateRefresh;
 
     [ViewVariables] public TimeSpan? LastComboUpdateTime;
+
+    [ViewVariables] public string? ActiveStyleId;
+
+    [ViewVariables] public int ActiveStylePriority;
 }
 
 [DataDefinition]

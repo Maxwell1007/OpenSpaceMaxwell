@@ -46,12 +46,12 @@ public sealed class CreepingWidowMasterySystem : CombatMasteryTechniqueSystem<Cr
         SubscribeLocalEvent<CreepingWidowMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
     }
 
-    protected override void OnMasteryStarted(Entity<CreepingWidowMasteryComponent> ent, ref ComponentStartup args)
+    protected override void OnMasteryStarted(Entity<CreepingWidowMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    protected override void OnMasteryStopped(Entity<CreepingWidowMasteryComponent> ent, ref ComponentShutdown args)
+    protected override void OnMasteryStopped(Entity<CreepingWidowMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }

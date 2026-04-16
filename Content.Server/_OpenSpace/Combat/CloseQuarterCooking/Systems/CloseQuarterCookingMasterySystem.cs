@@ -1,7 +1,8 @@
 using System.Numerics;
-using Content.Server._OpenSpace.Combat.CloseQuarterCombatMastery.Components;
+using Content.Server._OpenSpace.Combat.CloseQuarterCooking.Components;
 using Content.Server._OpenSpace.Combat.CombatMastery;
 using Content.Server._OpenSpace.Combat.CombatMastery.Systems;
+using Content.Shared.Maps;
 using Content.Shared.Bed.Sleep;
 using Content.Shared.CombatMode;
 using Content.Shared.Damage;
@@ -24,9 +25,9 @@ using Robust.Shared.Maths;
 using Robust.Shared.Random;
 using Robust.Shared.Timing;
 
-namespace Content.Server._OpenSpace.Combat.CloseQuarterCombatMastery.Systems;
+namespace Content.Server._OpenSpace.Combat.CloseQuarterCooking.Systems;
 
-public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSystem<CloseQuarterCombatMasteryComponent>
+public sealed class CloseQuarterCookingMasterySystem : CombatMasteryTechniqueSystem<CloseQuarterCookingMasteryComponent>
 {
     [Dependency] private readonly SharedHandsSystem _hands = default!;
     [Dependency] private readonly SharedJitteringSystem _jittering = default!;
@@ -35,6 +36,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
     [Dependency] private readonly StatusEffectsSystem _statusEffects = default!;
     [Dependency] private readonly SharedStaminaSystem _stamina = default!;
     [Dependency] private readonly SharedStunSystem _stun = default!;
+    [Dependency] private readonly TurfSystem _turf = default!;
     [Dependency] private readonly IGameTiming _timing = default!;
     [Dependency] private readonly ThrowingSystem _throwing = default!;
     [Dependency] private readonly TransformSystem _transform = default!;
@@ -43,26 +45,60 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
     {
         base.Initialize();
 
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, AttackAttemptEvent>(OnAttackAttempt,
+        SubscribeLocalEvent<CloseQuarterCookingMasteryComponent, AttackAttemptEvent>(OnAttackAttempt,
             before: [typeof(CombatMasteryControllerSystem)]);
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, DisarmedEvent>(OnDisarmed, before: [typeof(SharedStaminaSystem)]);
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, BeforeStaminaDamageEvent>(OnBeforeStaminaDamage);
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, CombatMasteryMeleeAttackedEvent>(OnMeleeAttacked);
-        SubscribeLocalEvent<CloseQuarterCombatMasteryComponent, DamageBeforeApplyEvent>(OnDamageBeforeApply);
+        SubscribeLocalEvent<CloseQuarterCookingMasteryComponent, DisarmedEvent>(OnDisarmed, before: [typeof(SharedStaminaSystem)]);
+        SubscribeLocalEvent<CloseQuarterCookingMasteryComponent, BeforeStaminaDamageEvent>(OnBeforeStaminaDamage);
+        SubscribeLocalEvent<CloseQuarterCookingMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
+        SubscribeLocalEvent<CloseQuarterCookingMasteryComponent, ComponentInit>(OnComponentInit);
+        SubscribeLocalEvent<CloseQuarterCookingMasteryComponent, MoveEvent>(OnMoved);
+        SubscribeLocalEvent<CloseQuarterCookingMasteryComponent, CombatMasteryMeleeAttackedEvent>(OnMeleeAttacked);
+        SubscribeLocalEvent<CloseQuarterCookingMasteryComponent, DamageBeforeApplyEvent>(OnDamageBeforeApply);
     }
 
-    protected override void OnMasteryStarted(Entity<CloseQuarterCombatMasteryComponent> ent)
+    protected override void OnMasteryStarted(Entity<CloseQuarterCookingMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    protected override void OnMasteryStopped(Entity<CloseQuarterCombatMasteryComponent> ent)
+    protected override void OnMasteryStopped(Entity<CloseQuarterCookingMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    private void OnCollectMeleeDamage(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
+    private void OnComponentInit(Entity<CloseQuarterCookingMasteryComponent> ent, ref ComponentInit args)
+    {
+        RefreshAreaGate(ent);
+    }
+
+    private void OnMoved(Entity<CloseQuarterCookingMasteryComponent> ent, ref MoveEvent args)
+    {
+        RefreshAreaGate(ent, args.Component);
+    }
+
+    private void RefreshAreaGate(Entity<CloseQuarterCookingMasteryComponent> ent, TransformComponent? xform = null)
+    {
+        var desiredPriority = IsOnAllowedTile(ent.Owner, xform)
+            ? ent.Comp.Priority
+            : ent.Comp.DisabledPriority;
+
+        if (ent.Comp.CurrentPriority == desiredPriority)
+            return;
+
+        ent.Comp.CurrentPriority = desiredPriority;
+        RequestActiveStyleRefresh(ent.Owner);
+    }
+
+    private bool IsOnAllowedTile(EntityUid uid, TransformComponent? xform = null)
+    {
+        if (!Resolve(uid, ref xform) || !_turf.TryGetTileRef(xform.Coordinates, out var tileRef))
+            return false;
+
+        var tileId = _turf.GetContentTileDefinition(tileRef.Value).ID;
+        return tileId is "FloorKitchen" or "FloorBar";
+    }
+
+    private void OnCollectMeleeDamage(Entity<CloseQuarterCookingMasteryComponent> ent, ref CombatMasteryCollectMeleeDamageEvent args)
     {
         if (!IsMasteryActive(ent))
             return;
@@ -70,26 +106,26 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         args.ConsiderDamage(ent.Comp.UnarmedDamage);
     }
 
-    protected override bool OnTemplateMatched(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
+    protected override bool OnTemplateMatched(Entity<CloseQuarterCookingMasteryComponent> ent, EntityUid target, CombatMasteryTemplate template)
     {
         switch (template.Name)
         {
-            case CloseQuarterCombatMasteryComponent.SlamTemplateName:
+            case CloseQuarterCookingMasteryComponent.SlamTemplateName:
                 return TryExecuteSlam(ent, target);
-            case CloseQuarterCombatMasteryComponent.CQCKickTemplateName:
+            case CloseQuarterCookingMasteryComponent.CQCKickTemplateName:
                 return TryExecuteKick(ent, target);
-            case CloseQuarterCombatMasteryComponent.RestrainTemplateName:
+            case CloseQuarterCookingMasteryComponent.RestrainTemplateName:
                 return TryExecuteRestrain(ent, target);
-            case CloseQuarterCombatMasteryComponent.PressureTemplateName:
+            case CloseQuarterCookingMasteryComponent.PressureTemplateName:
                 return TryExecutePressure(ent, target);
-            case CloseQuarterCombatMasteryComponent.ConsecutiveCQCTemplateName:
+            case CloseQuarterCookingMasteryComponent.ConsecutiveCQCTemplateName:
                 return TryExecuteConsecutiveCqc(ent, target);
         }
 
         return false;
     }
 
-    private void OnAttackAttempt(Entity<CloseQuarterCombatMasteryComponent> ent, ref AttackAttemptEvent args)
+    private void OnAttackAttempt(Entity<CloseQuarterCookingMasteryComponent> ent, ref AttackAttemptEvent args)
     {
         if (!IsMasteryActive(ent))
             return;
@@ -111,7 +147,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         args.Cancel();
     }
 
-    protected override void OnComboUpdated(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryComboUpdatedEvent args)
+    protected override void OnComboUpdated(Entity<CloseQuarterCookingMasteryComponent> ent, ref CombatMasteryComboUpdatedEvent args)
     {
         base.OnComboUpdated(ent, ref args);
 
@@ -127,7 +163,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         ResetRestrainFollowup(ent.Comp);
     }
 
-    private void OnMeleeAttacked(Entity<CloseQuarterCombatMasteryComponent> ent, ref CombatMasteryMeleeAttackedEvent args)
+    private void OnMeleeAttacked(Entity<CloseQuarterCookingMasteryComponent> ent, ref CombatMasteryMeleeAttackedEvent args)
     {
         if (args.Attacker == ent.Owner &&
             IsMasteryActive(ent) &&
@@ -172,7 +208,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         ApplyDefensiveCounter(ent.Comp, args.Attacker);
     }
 
-    private void OnDisarmed(Entity<CloseQuarterCombatMasteryComponent> ent, ref DisarmedEvent args)
+    private void OnDisarmed(Entity<CloseQuarterCookingMasteryComponent> ent, ref DisarmedEvent args)
     {
         if (!IsMasteryActive(ent))
             return;
@@ -189,7 +225,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         ApplyDefensiveCounter(ent.Comp, args.Source);
     }
 
-    private void OnBeforeStaminaDamage(Entity<CloseQuarterCombatMasteryComponent> ent, ref BeforeStaminaDamageEvent args)
+    private void OnBeforeStaminaDamage(Entity<CloseQuarterCookingMasteryComponent> ent, ref BeforeStaminaDamageEvent args)
     {
         if (!IsMasteryActive(ent))
             return;
@@ -208,7 +244,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         ClearPendingDefensiveNullifyIfUnused(ent.Comp);
     }
 
-    private void OnDamageBeforeApply(Entity<CloseQuarterCombatMasteryComponent> ent, ref DamageBeforeApplyEvent args)
+    private void OnDamageBeforeApply(Entity<CloseQuarterCookingMasteryComponent> ent, ref DamageBeforeApplyEvent args)
     {
         if (!ent.Comp.PendingDefensiveMeleeNullify)
         {
@@ -236,7 +272,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         ClearPendingDefensiveNullifyIfUnused(ent.Comp);
     }
 
-    private bool DoSlam(EntityUid user, EntityUid target, CloseQuarterCombatMasteryComponent component)
+    private bool DoSlam(EntityUid user, EntityUid target, CloseQuarterCookingMasteryComponent component)
     {
         if (TerminatingOrDeleted(target) || IsTargetStunned(target))
             return false;
@@ -246,7 +282,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool DoCQCKick(EntityUid user, EntityUid target, CloseQuarterCombatMasteryComponent component)
+    private bool DoCQCKick(EntityUid user, EntityUid target, CloseQuarterCookingMasteryComponent component)
     {
         if (TerminatingOrDeleted(target))
             return false;
@@ -263,7 +299,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool DoRestrain(EntityUid user, EntityUid target, CloseQuarterCombatMasteryComponent component)
+    private bool DoRestrain(EntityUid user, EntityUid target, CloseQuarterCookingMasteryComponent component)
     {
         if (TerminatingOrDeleted(target))
             return false;
@@ -278,7 +314,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool DoPressure(EntityUid user, EntityUid target, CloseQuarterCombatMasteryComponent component)
+    private bool DoPressure(EntityUid user, EntityUid target, CloseQuarterCookingMasteryComponent component)
     {
         if (TerminatingOrDeleted(target))
             return false;
@@ -287,7 +323,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool DoConsecutiveCqc(EntityUid user, EntityUid target, CloseQuarterCombatMasteryComponent component)
+    private bool DoConsecutiveCqc(EntityUid user, EntityUid target, CloseQuarterCookingMasteryComponent component)
     {
         if (TerminatingOrDeleted(target) || IsTargetStunned(target))
             return false;
@@ -298,7 +334,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool CanUseRestrainFollowup(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    private bool CanUseRestrainFollowup(Entity<CloseQuarterCookingMasteryComponent> ent, EntityUid target)
     {
         if (!ent.Comp.RestrainFollowupReady || ent.Comp.RestrainFollowupTarget != target)
             return false;
@@ -310,7 +346,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return false;
     }
 
-    private void ExecuteRestrainFollowup(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    private void ExecuteRestrainFollowup(Entity<CloseQuarterCookingMasteryComponent> ent, EntityUid target)
     {
         _statusEffects.TryAddStatusEffectDuration(target,
             SleepingSystem.StatusEffectForcedSleeping,
@@ -388,12 +424,12 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return args.Attack.Used == args.Attack.User;
     }
 
-    private void AddUnarmedBonusDamage(ref CombatMasteryMeleeAttackedEvent args, CloseQuarterCombatMasteryComponent component, float bonusDamage)
+    private void AddUnarmedBonusDamage(ref CombatMasteryMeleeAttackedEvent args, CloseQuarterCookingMasteryComponent component, float bonusDamage)
     {
         args.Attack.BonusDamage += CreateBluntDamage(component.BluntDamageType, bonusDamage);
     }
 
-    private static void ResetRestrainFollowup(CloseQuarterCombatMasteryComponent component)
+    private static void ResetRestrainFollowup(CloseQuarterCookingMasteryComponent component)
     {
         component.RestrainFollowupReady = false;
         component.SkipNextComboResetForRestrain = false;
@@ -401,7 +437,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         component.RestrainFollowupExpireAt = default;
     }
 
-    private static void ResetPendingDefensiveNullify(CloseQuarterCombatMasteryComponent component)
+    private static void ResetPendingDefensiveNullify(CloseQuarterCookingMasteryComponent component)
     {
         component.PendingDefensiveMeleeNullify = false;
         component.PendingDefensiveMeleeNullifyStamina = false;
@@ -410,7 +446,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
     }
 
     private void SetPendingDefensiveNullify(
-        CloseQuarterCombatMasteryComponent component,
+        CloseQuarterCookingMasteryComponent component,
         EntityUid origin,
         bool nullifyDamage,
         bool nullifyStamina)
@@ -421,7 +457,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         component.PendingDefensiveMeleeNullifyStamina = nullifyStamina;
     }
 
-    private void ApplyDefensiveCounter(CloseQuarterCombatMasteryComponent component, EntityUid attacker)
+    private void ApplyDefensiveCounter(CloseQuarterCookingMasteryComponent component, EntityUid attacker)
     {
         if (!HasRealActiveItem(attacker))
             return;
@@ -435,12 +471,12 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
             force: true);
     }
 
-    private bool IsPendingDefensiveNullifyExpired(CloseQuarterCombatMasteryComponent component)
+    private bool IsPendingDefensiveNullifyExpired(CloseQuarterCookingMasteryComponent component)
     {
         return _timing.CurTime > component.PendingDefensiveMeleeExpireAt;
     }
 
-    private static void ClearPendingDefensiveNullifyIfUnused(CloseQuarterCombatMasteryComponent component)
+    private static void ClearPendingDefensiveNullifyIfUnused(CloseQuarterCookingMasteryComponent component)
     {
         if (component.PendingDefensiveMeleeNullify || component.PendingDefensiveMeleeNullifyStamina)
             return;
@@ -448,7 +484,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         component.PendingDefensiveMeleeOrigin = null;
         component.PendingDefensiveMeleeExpireAt = default;
     }
-    private bool TryExecuteSlam(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    private bool TryExecuteSlam(Entity<CloseQuarterCookingMasteryComponent> ent, EntityUid target)
     {
         if (!DoSlam(ent.Owner, target, ent.Comp))
             return false;
@@ -457,7 +493,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool TryExecuteKick(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    private bool TryExecuteKick(Entity<CloseQuarterCookingMasteryComponent> ent, EntityUid target)
     {
         if (!DoCQCKick(ent.Owner, target, ent.Comp))
             return false;
@@ -466,7 +502,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool TryExecuteRestrain(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    private bool TryExecuteRestrain(Entity<CloseQuarterCookingMasteryComponent> ent, EntityUid target)
     {
         if (!DoRestrain(ent.Owner, target, ent.Comp))
             return false;
@@ -475,7 +511,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool TryExecutePressure(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    private bool TryExecutePressure(Entity<CloseQuarterCookingMasteryComponent> ent, EntityUid target)
     {
         if (!DoPressure(ent.Owner, target, ent.Comp))
             return false;
@@ -484,7 +520,7 @@ public sealed class CloseQuarterCombatMasterySystem : CombatMasteryTechniqueSyst
         return true;
     }
 
-    private bool TryExecuteConsecutiveCqc(Entity<CloseQuarterCombatMasteryComponent> ent, EntityUid target)
+    private bool TryExecuteConsecutiveCqc(Entity<CloseQuarterCookingMasteryComponent> ent, EntityUid target)
     {
         if (!DoConsecutiveCqc(ent.Owner, target, ent.Comp))
             return false;

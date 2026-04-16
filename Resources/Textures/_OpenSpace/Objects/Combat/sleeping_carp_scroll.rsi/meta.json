@@ -8,16 +8,7 @@
   },
   "states": [
     {
-      "name": "legsweep"
-    },
-    {
-      "name": "lungpunch"
-    },
-    {
-      "name": "neckchop"
-    },
-    {
-      "name": "neutralstance"
+      "name": "icon"
     }
   ]
 }

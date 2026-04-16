@@ -94,16 +94,16 @@ public sealed class SleepingCarpMasterySystem : CombatMasteryTechniqueSystem<Sle
 
         SubscribeLocalEvent<SleepingCarpMasteryComponent, CombatMasteryCollectMeleeDamageEvent>(OnCollectMeleeDamage);
         SubscribeLocalEvent<SleepingCarpMasteryComponent, ShotAttemptedEvent>(OnShotAttempted);
-        SubscribeLocalEvent<DamageableComponent, AttackedEvent>(OnMeleeAttacked);
+        SubscribeLocalEvent<SleepingCarpMasteryComponent, CombatMasteryMeleeAttackedEvent>(OnMeleeAttacked);
     }
 
-    protected override void OnMasteryStarted(Entity<SleepingCarpMasteryComponent> ent, ref ComponentStartup args)
+    protected override void OnMasteryStarted(Entity<SleepingCarpMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
         SyncReflectState(ent);
     }
 
-    protected override void OnMasteryStopped(Entity<SleepingCarpMasteryComponent> ent, ref ComponentShutdown args)
+    protected override void OnMasteryStopped(Entity<SleepingCarpMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
         RestoreReflectState(ent);
@@ -142,29 +142,32 @@ public sealed class SleepingCarpMasterySystem : CombatMasteryTechniqueSystem<Sle
         _popup.PopupEntity(Loc.GetString(ent.Comp.NoGunsPopupLoc), ent.Owner, ent.Owner);
     }
 
-    private void OnMeleeAttacked(Entity<DamageableComponent> ent, ref AttackedEvent args)
+    private void OnMeleeAttacked(Entity<SleepingCarpMasteryComponent> ent, ref CombatMasteryMeleeAttackedEvent args)
     {
-        if (!IsUnarmedMeleeAttack(args) ||
-            !TryComp<SleepingCarpMasteryComponent>(args.User, out var mastery) ||
-            !IsMasteryActive((args.User, mastery)))
+        if (args.Attacker != ent.Owner ||
+            !IsMasteryActive(ent) ||
+            !IsUnarmedMeleeAttack(args))
         {
             return;
         }
 
-        var randomBonus = _random.NextFloat(0f, mastery.RandomUnarmedBonusDamage);
+        var randomBonus = _random.NextFloat(0f, ent.Comp.RandomUnarmedBonusDamage);
         if (randomBonus > 0f)
-            args.BonusDamage += CreateBluntDamage(mastery.BluntDamageType, randomBonus);
+            args.Attack.BonusDamage += CreateBluntDamage(ent.Comp.BluntDamageType, randomBonus);
 
-        if (IsEntityDown(ent.Owner))
+        if (IsEntityDown(args.Target))
             return;
 
-        var bruteDamage = _damageable.GetDamage((ent.Owner, ent.Comp), mastery.BruteDamageGroup).GetTotal().Float();
+        if (!TryComp<DamageableComponent>(args.Target, out var targetDamage))
+            return;
+
+        var bruteDamage = _damageable.GetDamage((args.Target, targetDamage), ent.Comp.BruteDamageGroup).GetTotal().Float();
         var knockdownChance = Math.Clamp(bruteDamage / 100f, 0f, 1f);
         if (!_random.Prob(knockdownChance))
             return;
 
-        _stun.TryKnockdown(ent.Owner,
-            mastery.BasicHitKnockdownDuration,
+        _stun.TryKnockdown(args.Target,
+            ent.Comp.BasicHitKnockdownDuration,
             refresh: true,
             autoStand: true,
             drop: true,
@@ -329,9 +332,9 @@ public sealed class SleepingCarpMasterySystem : CombatMasteryTechniqueSystem<Sle
                (_mobState.IsDead(target) || _mobState.IsCritical(target) || IsEntityDown(target));
     }
 
-    private static bool IsUnarmedMeleeAttack(AttackedEvent args)
+    private static bool IsUnarmedMeleeAttack(CombatMasteryMeleeAttackedEvent args)
     {
-        return args.Used == args.User;
+        return args.Attack.Used == args.Attack.User;
     }
 
     private void ApplyBluntDamage(

@@ -3,7 +3,6 @@ using Content.Server._OpenSpace.Combat.CombatMastery;
 using Content.Server._OpenSpace.Combat.CombatMastery.Systems;
 using Content.Server._OpenSpace.Combat.KravMaga.Components;
 using Content.Shared.Bed.Sleep;
-using Content.Shared.Damage.Components;
 using Content.Shared.Hands.EntitySystems;
 using Content.Shared.Inventory.VirtualItem;
 using Content.Shared.StatusEffectNew;
@@ -11,7 +10,6 @@ using Content.Shared.Stunnable;
 using Content.Shared._OpenSpace.Combat.CombatMastery.Events;
 using Content.Shared._OpenSpace.Combat.KravMaga;
 using Content.Shared._Starlight.BreathOrgan;
-using Content.Shared.Weapons.Melee.Events;
 using Robust.Shared.Random;
 
 namespace Content.Server._OpenSpace.Combat.KravMaga.Systems;
@@ -33,15 +31,15 @@ public sealed class KravMagaMasterySystem : CombatMasteryTechniqueSystem<KravMag
         SubscribeLocalEvent<KravMagaMasteryComponent, KravMagaLungPunchActionEvent>(OnLungPunchAction);
         SubscribeLocalEvent<KravMagaMasteryComponent, KravMagaNeckChopActionEvent>(OnNeckChopAction);
         SubscribeLocalEvent<KravMagaMasteryComponent, CombatDisarmAttemptedEvent>(OnCombatDisarmAttempted);
-        SubscribeLocalEvent<DamageableComponent, AttackedEvent>(OnMeleeAttacked);
+        SubscribeLocalEvent<KravMagaMasteryComponent, CombatMasteryMeleeAttackedEvent>(OnMeleeAttacked);
     }
 
-    protected override void OnMasteryStarted(Entity<KravMagaMasteryComponent> ent, ref ComponentStartup args)
+    protected override void OnMasteryStarted(Entity<KravMagaMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }
 
-    protected override void OnMasteryStopped(Entity<KravMagaMasteryComponent> ent, ref ComponentShutdown args)
+    protected override void OnMasteryStopped(Entity<KravMagaMasteryComponent> ent)
     {
         RequestMeleeDamageRefresh(ent.Owner);
     }
@@ -59,17 +57,17 @@ public sealed class KravMagaMasterySystem : CombatMasteryTechniqueSystem<KravMag
         args.ConsiderDamage(ent.Comp.UnarmedDamage);
     }
 
-    private void OnMeleeAttacked(Entity<DamageableComponent> ent, ref AttackedEvent args)
+    private void OnMeleeAttacked(Entity<KravMagaMasteryComponent> ent, ref CombatMasteryMeleeAttackedEvent args)
     {
-        if (!IsUnarmedMeleeAttack(args) ||
-            !TryComp<KravMagaMasteryComponent>(args.User, out var mastery) ||
-            !IsMasteryActive((args.User, mastery)) ||
-            !IsEntityDown(ent.Owner))
+        if (args.Attacker != ent.Owner ||
+            !IsMasteryActive(ent) ||
+            !IsUnarmedMeleeAttack(args) ||
+            !IsEntityDown(args.Target))
         {
             return;
         }
 
-        args.BonusDamage += CreateBluntDamage(mastery.BluntDamageType, mastery.DownedTargetBonusDamage);
+        args.Attack.BonusDamage += CreateBluntDamage(ent.Comp.BluntDamageType, ent.Comp.DownedTargetBonusDamage);
     }
 
     private void OnCombatDisarmAttempted(Entity<KravMagaMasteryComponent> ent, ref CombatDisarmAttemptedEvent args)
@@ -138,9 +136,9 @@ public sealed class KravMagaMasterySystem : CombatMasteryTechniqueSystem<KravMag
         args.Handled = true;
     }
 
-    private static bool IsUnarmedMeleeAttack(AttackedEvent args)
+    private static bool IsUnarmedMeleeAttack(CombatMasteryMeleeAttackedEvent args)
     {
-        return args.Used == args.User;
+        return args.Attack.Used == args.Attack.User;
     }
 
     private bool CanUseTechnique(Entity<KravMagaMasteryComponent> ent, EntityUid performer, EntityUid target)

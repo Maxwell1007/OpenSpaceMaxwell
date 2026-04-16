@@ -8,6 +8,7 @@ using Content.Shared.Interaction;
 using Content.Shared.Interaction.Events;
 using Content.Shared.Mobs.Components;
 using Content.Shared.Movement.Pulling.Events;
+using Content.Shared.Damage.Components;
 using Content.Shared.Weapons.Melee;
 using Content.Shared.Weapons.Melee.Events;
 using Content.Shared._OpenSpace.Combat.CombatMastery;
@@ -36,6 +37,8 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         SubscribeLocalEvent<CombatMasteryComponent, CombatGrabPerformedEvent>(OnCombatGrabPerformed);
         SubscribeLocalEvent<CombatMasteryComponent, CombatMasteryHudRefreshEvent>(OnHudRefreshRequested);
         SubscribeLocalEvent<CombatMasteryComponent, CombatMasteryRefreshMeleeDamageEvent>(OnMeleeDamageRefreshRequested);
+        SubscribeLocalEvent<CombatMasteryComponent, CombatMasteryRefreshActiveStyleEvent>(OnActiveStyleRefreshRequested);
+        SubscribeLocalEvent<DamageableComponent, AttackedEvent>(OnMeleeAttacked);
     }
 
     private void OnCombatMasteryInit(Entity<CombatMasteryComponent> ent, ref ComponentInit args)
@@ -43,8 +46,13 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         ent.Comp.LastComboUpdateTime = null;
         ent.Comp.PendingMeleeDamageRefresh = false;
         ent.Comp.PendingHudStateRefresh = false;
+        ent.Comp.ActiveStyleId = null;
+        ent.Comp.ActiveStylePriority = 0;
         EnsureComp<CombatMasteryComboHudComponent>(ent.Owner);
         ResetTemplateProgress(ent.Owner);
+        RefreshActiveStyle(ent, force: true);
+        ent.Comp.PendingMeleeDamageRefresh = false;
+        ent.Comp.PendingHudStateRefresh = false;
         RefreshMeleeDamage(ent);
         SyncHudState(ent);
     }
@@ -70,7 +78,6 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         if (args.Target is not { } target || target == ent.Owner)
         {
             ClearCombo(ent);
-            return;
         }
     }
 
@@ -115,8 +122,19 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         if (ApplyComboStep(ent, target, ComboMasteryKeys.attack))
         {
             args.Handled = true;
-            return;
         }
+    }
+
+    private void OnMeleeAttacked(Entity<DamageableComponent> ent, ref AttackedEvent args)
+    {
+        if (!HasComp<CombatMasteryComponent>(args.User))
+            return;
+
+        var forwarded = new CombatMasteryMeleeAttackedEvent(args.User, ent.Owner, args);
+
+        RaiseLocalEvent(args.User, ref forwarded);
+        if (ent.Owner != args.User)
+            RaiseLocalEvent(ent.Owner, ref forwarded);
     }
 
     private void OnCombatDisarmAttempted(Entity<CombatMasteryComponent> ent, ref CombatDisarmAttemptedEvent args)
@@ -190,13 +208,15 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         return true;
     }
 
-    private void ClearCombo(Entity<CombatMasteryComponent> ent)
+    private void ClearCombo(Entity<CombatMasteryComponent> ent, bool syncHud = true)
     {
         ent.Comp.CombatMasteryCurrentCombo.Clear();
         ent.Comp.CurrentTarget = null;
         ent.Comp.LastComboUpdateTime = null;
         ResetTemplateProgress(ent.Owner);
-        SyncHudState(ent);
+
+        if (syncHud)
+            SyncHudState(ent);
     }
 
     private void ResetTemplateProgress(EntityUid uid)
@@ -213,6 +233,11 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
     private void OnMeleeDamageRefreshRequested(Entity<CombatMasteryComponent> ent, ref CombatMasteryRefreshMeleeDamageEvent args)
     {
         ent.Comp.PendingMeleeDamageRefresh = true;
+    }
+
+    private void OnActiveStyleRefreshRequested(Entity<CombatMasteryComponent> ent, ref CombatMasteryRefreshActiveStyleEvent args)
+    {
+        RefreshActiveStyle(ent, args.IgnoredStyleId);
     }
 
     private void RefreshMeleeDamage(Entity<CombatMasteryComponent> ent)
@@ -259,6 +284,32 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         return scaled;
     }
 
+    private void RefreshActiveStyle(Entity<CombatMasteryComponent> ent, string? ignoredStyleId = null, bool force = false)
+    {
+        var selectEvent = new CombatMasterySelectActiveStyleEvent(ent.Comp.ActiveStyleId, ignoredStyleId);
+        RaiseLocalEvent(ent.Owner, ref selectEvent);
+
+        var newStyleId = selectEvent.SelectedStyleId;
+        var newPriority = newStyleId == null ? 0 : selectEvent.SelectedPriority;
+        var oldStyleId = ent.Comp.ActiveStyleId;
+
+        if (!force && oldStyleId == newStyleId)
+            return;
+
+        ent.Comp.ActiveStyleId = newStyleId;
+        ent.Comp.ActiveStylePriority = newPriority;
+
+        if (oldStyleId != newStyleId)
+        {
+            var styleChangedEvent = new CombatMasteryActiveStyleChangedEvent(oldStyleId, newStyleId, newPriority);
+            RaiseLocalEvent(ent.Owner, ref styleChangedEvent);
+            ClearCombo(ent, syncHud: false);
+        }
+
+        ent.Comp.PendingMeleeDamageRefresh = true;
+        ent.Comp.PendingHudStateRefresh = true;
+    }
+
     public override void Update(float frameTime)
     {
         base.Update(frameTime);
@@ -286,13 +337,6 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
         }
     }
 
-    private bool HasActiveMastery(EntityUid uid)
-    {
-        var query = new CombatMasteryActiveStateQueryEvent();
-        RaiseLocalEvent(uid, ref query);
-        return query.HasActiveMastery;
-    }
-
     private bool IsComboExpired(CombatMasteryComponent component)
     {
         if (component.CombatMasteryCurrentCombo.Count == 0)
@@ -312,7 +356,7 @@ public sealed class CombatMasteryControllerSystem : EntitySystem
     private void SyncHudState(Entity<CombatMasteryComponent> ent)
     {
         var hud = EnsureComp<CombatMasteryComboHudComponent>(ent.Owner);
-        hud.HasActiveMastery = HasActiveMastery(ent.Owner);
+        hud.HasActiveMastery = ent.Comp.ActiveStyleId != null;
         hud.VisibleCombo.Clear();
 
         if (hud.HasActiveMastery && ent.Comp.CombatMasteryCurrentCombo.Count > 0)
