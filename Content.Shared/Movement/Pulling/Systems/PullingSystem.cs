@@ -61,7 +61,6 @@ public sealed class PullingSystem : EntitySystem
     private static readonly TimeSpan BreakAttemptCooldown = TimeSpan.FromSeconds(0.5); // OpenSpace-Edit
 
     [Dependency] private readonly IGameTiming _timing = default!;
-    [Dependency] private readonly IComponentFactory _componentFactory = default!;
     [Dependency] private readonly ISharedAdminLogManager _adminLogger = default!;
     [Dependency] private readonly ActionBlockerSystem _blocker = default!;
     [Dependency] private readonly AlertsSystem _alertsSystem = default!;
@@ -85,7 +84,6 @@ public sealed class PullingSystem : EntitySystem
     [Dependency] private readonly SharedStunSystem _stun = default!;
     [Dependency] private readonly IMapManager _mapManager = default!;
     [Dependency] private readonly ClimbSystem _climbSystem = default!;
-    private Type? _cqcComponentType;
 
     public override void Update(float frameTime)
     {
@@ -119,9 +117,6 @@ public sealed class PullingSystem : EntitySystem
 
         UpdatesAfter.Add(typeof(SharedPhysicsSystem));
         UpdatesOutsidePrediction = true;
-
-        if (_componentFactory.TryGetRegistration("CloseQuarterCombatMastery", out var cqcRegistration))
-            _cqcComponentType = cqcRegistration.Type;
 
         SubscribeLocalEvent<PullableComponent, MoveInputEvent>(OnPullableMoveInput);
         SubscribeLocalEvent<PullableComponent, CollisionChangeEvent>(OnPullableCollisionChange);
@@ -520,10 +515,6 @@ public sealed class PullingSystem : EntitySystem
         return false;
     }
 
-    private bool HasCloseQuarterCombatMastery(EntityUid uid)
-    {
-        return _cqcComponentType != null && HasComp(uid, _cqcComponentType);
-    }
     // OpenSpace-Edit End
 
     public override void Shutdown()
@@ -615,12 +606,11 @@ public sealed class PullingSystem : EntitySystem
         var chance = 1f;
         if (component.Puller != null && TryComp(component.Puller, out PullerComponent? pullerComp))
         {
-            var cqcGrabber = HasCloseQuarterCombatMastery(component.Puller.Value);
             chance = pullerComp.GrabStage switch
             {
                 GrabStage.Medium => 0.5f,
-                GrabStage.Heavy => cqcGrabber ? 0.40f : 0.15f,
-                GrabStage.Choke => cqcGrabber ? 0.10f : 0f,
+                GrabStage.Heavy => 0.15f,
+                GrabStage.Choke => 0f,
                 _ => 1f
             };
         }

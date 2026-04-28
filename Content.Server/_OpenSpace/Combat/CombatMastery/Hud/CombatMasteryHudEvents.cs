@@ -7,4 +7,10 @@ public sealed class CombatMasteryActiveStateQueryEvent : EntityEventArgs
 }
 
 [ByRefEvent]
+public sealed class CombatMasteryHighestPriorityQueryEvent : EntityEventArgs
+{
+    public int HighestPriority { get; set; } = int.MinValue;
+}
+
+[ByRefEvent]
 public sealed class CombatMasteryHudRefreshEvent : EntityEventArgs;
