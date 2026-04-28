@@ -11,24 +11,19 @@ using Content.Shared.Flash.Components;
 using Content.Shared.Hands.EntitySystems;
 using Content.Shared.Movement.Pulling.Components;
 using Content.Shared.Movement.Systems;
-using Content.Shared.StatusEffectNew;
 using Content.Shared.Stunnable;
 using Content.Shared._OpenSpace.Combat.CombatMastery;
-using Robust.Shared.Timing;
 using LegacyStatusEffectsSystem = Content.Shared.StatusEffect.StatusEffectsSystem;
 
 namespace Content.Server._OpenSpace.Combat.CorporateJudo.Systems;
 
 public sealed class CorporateJudoMasterySystem : CombatMasteryTechniqueSystem<CorporateJudoMasteryComponent>
 {
-    [Dependency] private readonly BlindableSystem _blindable = default!;
     [Dependency] private readonly SharedHandsSystem _hands = default!;
     [Dependency] private readonly LegacyStatusEffectsSystem _legacyStatusEffects = default!;
     [Dependency] private readonly MovementModStatusSystem _movement = default!;
     [Dependency] private readonly SharedStaminaSystem _stamina = default!;
-    [Dependency] private readonly StatusEffectsSystem _statusEffects = default!;
     [Dependency] private readonly SharedStunSystem _stun = default!;
-    [Dependency] private readonly IGameTiming _timing = default!;
 
     public override void Initialize()
     {
@@ -88,11 +83,12 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTechniqueSystem<Co
         if (TerminatingOrDeleted(target))
             return false;
 
-        _statusEffects.TryAddStatusEffectDuration(target,
-            CorporateJudoMasteryComponent.TemporaryBlindnessStatusEffectId,
-            component.EyePokeBlindDuration);
+        _legacyStatusEffects.TryAddStatusEffect<TemporaryBlindnessComponent>(
+            target,
+            TemporaryBlindnessSystem.BlindingStatusEffect,
+            component.EyePokeBlindDuration,
+            refresh: false);
 
-        ApplyEyePokeBlur(target, component);
         ApplyBluntDamage(user, target, component.BluntDamageType, component.EyePokeBluntDamage);
         return true;
     }
@@ -165,33 +161,6 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTechniqueSystem<Co
         _movement.TryAddMovementSpeedModDuration(target, MovementModStatusSystem.FlashSlowdown, duration, component.FlashSlowTo);
     }
 
-    private void ApplyEyePokeBlur(EntityUid target, CorporateJudoMasteryComponent component)
-    {
-        if (!TryComp<BlindableComponent>(target, out var blindable))
-            return;
-
-        var blur = EnsureComp<CorporateJudoEyePokeBlurComponent>(target);
-        var now = _timing.CurTime;
-        var remaining = blur.ExpireAt > now
-            ? blur.ExpireAt - now
-            : TimeSpan.Zero;
-        var totalDuration = remaining + component.EyePokeBlurDuration;
-        if (totalDuration > component.EyePokeBlurMaximumDuration)
-            totalDuration = component.EyePokeBlurMaximumDuration;
-
-        blur.ExpireAt = now + totalDuration;
-
-        if (!blur.Initialized)
-        {
-            blur.Initialized = true;
-            blur.OriginalMinEyeDamage = blindable.MinDamage;
-            blur.AppliedMinEyeDamage = Math.Max(blur.OriginalMinEyeDamage, component.EyePokeBlurMinEyeDamage);
-        }
-
-        if (blindable.MinDamage < blur.AppliedMinEyeDamage)
-            _blindable.SetMinDamage((target, blindable), blur.AppliedMinEyeDamage);
-    }
-
     private void ApplySlipLikeStun(EntityUid target, TimeSpan duration)
     {
         _stun.TryUpdateStunDuration(target, duration);
@@ -202,28 +171,6 @@ public sealed class CorporateJudoMasterySystem : CombatMasteryTechniqueSystem<Co
             drop: true,
             force: true,
             voluntary: false);
-    }
-
-    public override void Update(float frameTime)
-    {
-        base.Update(frameTime);
-
-        var now = _timing.CurTime;
-        var query = EntityQueryEnumerator<CorporateJudoEyePokeBlurComponent>();
-        while (query.MoveNext(out var uid, out var blur))
-        {
-            if (now < blur.ExpireAt)
-                continue;
-
-            if (blur.Initialized &&
-                TryComp<BlindableComponent>(uid, out var blindable) &&
-                blindable.MinDamage == blur.AppliedMinEyeDamage)
-            {
-                _blindable.SetMinDamage((uid, blindable), blur.OriginalMinEyeDamage);
-            }
-
-            RemCompDeferred<CorporateJudoEyePokeBlurComponent>(uid);
-        }
     }
 
     private bool TryExecuteDiscombobulate(Entity<CorporateJudoMasteryComponent> ent, EntityUid target)

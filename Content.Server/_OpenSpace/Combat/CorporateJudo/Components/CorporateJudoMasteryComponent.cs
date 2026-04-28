@@ -20,8 +20,6 @@ public sealed partial class CorporateJudoMasteryComponent : Component, ICombatMa
     public const string GoldenBlastTemplateName = "GoldenBlast";
 
     public const string FlashedStatusEffectId = "Flashed";
-    public const string TemporaryBlindnessStatusEffectId = "StatusEffectTemporaryBlindness";
-
     [DataField]
     public ProtoId<DamageTypePrototype> BluntDamageType = "Blunt";
 
@@ -39,15 +37,6 @@ public sealed partial class CorporateJudoMasteryComponent : Component, ICombatMa
 
     [DataField]
     public TimeSpan EyePokeBlindDuration = TimeSpan.FromSeconds(2);
-
-    [DataField]
-    public TimeSpan EyePokeBlurDuration = TimeSpan.FromSeconds(5);
-
-    [DataField]
-    public TimeSpan EyePokeBlurMaximumDuration = TimeSpan.FromSeconds(30);
-
-    [DataField]
-    public int EyePokeBlurMinEyeDamage = 6;
 
     [DataField]
     public float JudoThrowStaminaDamage = 25f;
